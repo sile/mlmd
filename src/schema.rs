@@ -1,6 +1,6 @@
 table! {
     Artifact (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         type_id -> Integer,
         uri -> Nullable<Text>,
         state -> Nullable<Integer>,
@@ -23,7 +23,7 @@ table! {
 
 table! {
     Association (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         context_id -> Integer,
         execution_id -> Integer,
     }
@@ -31,7 +31,7 @@ table! {
 
 table! {
     Attribution (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         context_id -> Integer,
         artifact_id -> Integer,
     }
@@ -39,7 +39,7 @@ table! {
 
 table! {
     Context (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         type_id -> Integer,
         name -> Text,
         create_time_since_epoch -> BigInt,
@@ -60,7 +60,7 @@ table! {
 
 table! {
     Event (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         artifact_id -> Integer,
         execution_id -> Integer,
         #[sql_name = "type"]
@@ -71,7 +71,7 @@ table! {
 
 table! {
     Execution (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         type_id -> Integer,
         last_known_state -> Nullable<Integer>,
         name -> Nullable<Text>,
@@ -93,7 +93,7 @@ table! {
 
 table! {
     MLMDEnv (schema_version) {
-        schema_version -> Integer,
+        schema_version -> Nullable<Integer>,
     }
 }
 
@@ -113,7 +113,7 @@ table! {
 
 table! {
     Type (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         name -> Text,
         version -> Nullable<Text>,
         type_kind -> Bool,

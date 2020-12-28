@@ -2,7 +2,7 @@ use diesel::Queryable;
 
 #[derive(Debug, Clone, Queryable)]
 pub struct ArtifactModel {
-    pub id: i32,
+    pub id: Option<i32>,
     pub type_id: i32,
     pub uri: Option<String>,
     pub state: Option<i32>,
@@ -23,21 +23,21 @@ pub struct ArtifactPropertyModel {
 
 #[derive(Debug, Clone, Queryable)]
 pub struct AssociationModel {
-    pub id: i32,
+    pub id: Option<i32>,
     pub context_id: i32,
     pub execution_id: i32,
 }
 
 #[derive(Debug, Clone, Queryable)]
 pub struct AttributionModel {
-    pub id: i32,
+    pub id: Option<i32>,
     pub context_id: i32,
     pub artifact_id: i32,
 }
 
 #[derive(Debug, Clone, Queryable)]
 pub struct ContextModel {
-    pub id: i32,
+    pub id: Option<i32>,
     pub type_id: i32,
     pub name: String,
     pub create_time_since_epoch: i64,
@@ -56,7 +56,7 @@ pub struct ContextPropertyModel {
 
 #[derive(Debug, Clone, Queryable)]
 pub struct EventModel {
-    pub id: i32,
+    pub id: Option<i32>,
     pub artifact_id: i32,
     pub execution_id: i32,
     pub event_type: i32,
@@ -65,7 +65,7 @@ pub struct EventModel {
 
 #[derive(Debug, Clone, Queryable)]
 pub struct ExecutionModel {
-    pub id: i32,
+    pub id: Option<i32>,
     pub type_id: i32,
     pub last_known_state: Option<i32>,
     pub name: Option<String>,
@@ -85,7 +85,7 @@ pub struct ExecutionPropertyModel {
 
 #[derive(Debug, Clone, Queryable)]
 pub struct MlmdEnvModel {
-    pub schema_version: i32,
+    pub schema_version: Option<i32>,
 }
 
 #[derive(Debug, Clone, Queryable)]
@@ -102,7 +102,7 @@ pub struct ParentTypeModel {
 
 #[derive(Debug, Clone, Queryable)]
 pub struct TypeModel {
-    pub id: i32,
+    pub id: Option<i32>,
     pub name: String,
     pub version: Option<String>,
     pub type_kind: bool,

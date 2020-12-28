@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 diesel = { version = "1", features = ["sqlite"] }
+thiserror = "1"
 
 [dev-dependencies]
 anyhow = "1"

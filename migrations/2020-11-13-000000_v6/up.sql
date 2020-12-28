@@ -2,7 +2,7 @@
 -- See: https://github.com/google/ml-metadata/blob/v0.25.0/ml_metadata/util/metadata_source_query_config.cc
 
 CREATE TABLE IF NOT EXISTS `Type` (
-  `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  `id` INTEGER PRIMARY KEY AUTOINCREMENT,
   `name` VARCHAR(255) NOT NULL,
   `version` VARCHAR(255),
   `type_kind` TINYINT(1) NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `TypeProperty` (
 PRIMARY KEY (`type_id`, `name`));
 
 CREATE TABLE IF NOT EXISTS `Artifact` (
-   `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+   `id` INTEGER PRIMARY KEY AUTOINCREMENT,
    `type_id` INT NOT NULL,
    `uri` TEXT,
    `state` INT,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS `ArtifactProperty` (
 PRIMARY KEY (`artifact_id`, `name`, `is_custom_property`));
 
 CREATE TABLE IF NOT EXISTS `Execution` (
-   `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+   `id` INTEGER PRIMARY KEY AUTOINCREMENT,
    `type_id` INT NOT NULL,
    `last_known_state` INT,
    `name` VARCHAR(255),
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS `ExecutionProperty` (
 PRIMARY KEY (`execution_id`, `name`, `is_custom_property`));
 
 CREATE TABLE IF NOT EXISTS `Context` (
-   `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+   `id` INTEGER PRIMARY KEY AUTOINCREMENT,
    `type_id` INT NOT NULL,
    `name` VARCHAR(255) NOT NULL,
    `create_time_since_epoch` BIGINT NOT NULL DEFAULT 0,
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS `ParentContext` (
 PRIMARY KEY (`context_id`, `parent_context_id`));
 
 CREATE TABLE IF NOT EXISTS `Event` (
-   `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+   `id` INTEGER PRIMARY KEY AUTOINCREMENT,
    `artifact_id` INT NOT NULL,
    `execution_id` INT NOT NULL,
    `type` INT NOT NULL,
@@ -100,19 +100,19 @@ CREATE TABLE IF NOT EXISTS `EventPath` (
 );
 
 CREATE TABLE IF NOT EXISTS `Association` (
-   `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+   `id` INTEGER PRIMARY KEY AUTOINCREMENT,
    `context_id` INT NOT NULL,
    `execution_id` INT NOT NULL,
    UNIQUE(`context_id`, `execution_id`)
 );
 
 CREATE TABLE IF NOT EXISTS `Attribution` (
-   `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+   `id` INTEGER PRIMARY KEY AUTOINCREMENT,
    `context_id` INT NOT NULL,
    `artifact_id` INT NOT NULL,
    UNIQUE(`context_id`, `artifact_id`)
 );
 
 CREATE TABLE IF NOT EXISTS `MLMDEnv` (
-   `schema_version` INTEGER PRIMARY KEY NOT NULL
+   `schema_version` INTEGER PRIMARY KEY
 );
