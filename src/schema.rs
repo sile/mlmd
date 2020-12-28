@@ -1,12 +1,12 @@
 table! {
     Artifact (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         type_id -> Integer,
         uri -> Nullable<Text>,
         state -> Nullable<Integer>,
         name -> Nullable<Text>,
-        create_time_since_epoch -> Integer,
-        last_update_time_since_epoch -> Integer,
+        create_time_since_epoch -> BigInt,
+        last_update_time_since_epoch -> BigInt,
     }
 }
 
@@ -23,7 +23,7 @@ table! {
 
 table! {
     Association (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         context_id -> Integer,
         execution_id -> Integer,
     }
@@ -31,7 +31,7 @@ table! {
 
 table! {
     Attribution (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         context_id -> Integer,
         artifact_id -> Integer,
     }
@@ -39,11 +39,11 @@ table! {
 
 table! {
     Context (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         type_id -> Integer,
         name -> Text,
-        create_time_since_epoch -> Integer,
-        last_update_time_since_epoch -> Integer,
+        create_time_since_epoch -> BigInt,
+        last_update_time_since_epoch -> BigInt,
     }
 }
 
@@ -60,23 +60,23 @@ table! {
 
 table! {
     Event (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         artifact_id -> Integer,
         execution_id -> Integer,
         #[sql_name = "type"]
         type_ -> Integer,
-        milliseconds_since_epoch -> Nullable<Integer>,
+        milliseconds_since_epoch -> Nullable<BigInt>,
     }
 }
 
 table! {
     Execution (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         type_id -> Integer,
         last_known_state -> Nullable<Integer>,
         name -> Nullable<Text>,
-        create_time_since_epoch -> Integer,
-        last_update_time_since_epoch -> Integer,
+        create_time_since_epoch -> BigInt,
+        last_update_time_since_epoch -> BigInt,
     }
 }
 
@@ -93,7 +93,7 @@ table! {
 
 table! {
     MLMDEnv (schema_version) {
-        schema_version -> Nullable<Integer>,
+        schema_version -> Integer,
     }
 }
 
@@ -113,7 +113,7 @@ table! {
 
 table! {
     Type (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         name -> Text,
         version -> Nullable<Text>,
         type_kind -> Bool,
