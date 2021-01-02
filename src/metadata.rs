@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,7 +32,7 @@ impl<'a> From<&'a str> for Value {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropertyType {
     Unknown = 0,
     Int = 1,
@@ -41,18 +40,42 @@ pub enum PropertyType {
     String = 3,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ArtifactTypeId(i32);
+
+impl ArtifactTypeId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ArtifactType {
-    pub id: i32,
+    pub id: ArtifactTypeId,
     pub name: String,
     pub properties: BTreeMap<String, PropertyType>,
 }
 
-impl ArtifactType {
-    // pub fn instantiate(&self, id: i32
+#[derive(Debug, Clone)]
+pub struct NewArtifactType {
+    pub name: String,
+    pub properties: BTreeMap<String, PropertyType>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+impl NewArtifactType {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            properties: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArtifactState {
     Unknown = 0,
     Pending = 1,
@@ -61,11 +84,24 @@ pub enum ArtifactState {
     Deleted = 4,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ArtifactId(i32);
+
+impl ArtifactId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Artifact {
-    pub id: i32,
+    pub ty: ArtifactType,
+    pub id: ArtifactId,
     pub name: Option<String>,
-    pub ty: Arc<ArtifactType>,
     pub uri: Option<String>,
     pub properties: BTreeMap<String, Value>,
     pub state: ArtifactState,
@@ -73,52 +109,271 @@ pub struct Artifact {
     pub last_update_time_since_epoch: Duration,
 }
 
-// impl Artifact {
-//     pub fn builder(id: u32, type_id: u32) -> ArtifactBuilder {
-//         let elapsed = UNIX_EPOCH
-//             .elapsed()
-//             .unwrap_or_else(|_| Duration::from_secs(0));
-//         ArtifactBuilder(Artifact {
-//             id,
-//             type_id,
-//             name: None,
-//             uri: None,
-//             properties: BTreeMap::new(),
-//             state: ArtifactState::Unknown,
-//             create_time_since_epoch: elapsed,
-//             last_update_time_since_epoch: elapsed,
-//         })
-//     }
-// }
+#[derive(Debug, Clone)]
+pub struct NewArtifact {
+    pub ty: ArtifactType,
+    pub name: Option<String>,
+    pub uri: Option<String>,
+    pub properties: BTreeMap<String, Value>,
+    pub state: ArtifactState,
+}
 
-// #[derive(Debug, Clone)]
-// pub struct ArtifactBuilder(Artifact);
+impl NewArtifact {
+    pub fn new(ty: ArtifactType) -> Self {
+        Self {
+            ty,
+            name: None,
+            uri: None,
+            properties: BTreeMap::new(),
+            state: ArtifactState::Unknown,
+        }
+    }
+}
 
-// impl ArtifactBuilder {
-//     pub fn name(mut self, name: &str) -> Self {
-//         self.0.name = Some(name.to_owned());
-//         self
-//     }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ExecutionTypeId(i32);
 
-//     pub fn uri(mut self, uri: &str) -> Self {
-//         self.0.uri = Some(uri.to_owned());
-//         self
-//     }
+impl ExecutionTypeId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
 
-//     pub fn property<T>(mut self, key: &str, value: T) -> Self
-//     where
-//         T: Into<Value>,
-//     {
-//         self.0.properties.insert(key.to_owned(), value.into());
-//         self
-//     }
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
 
-//     pub fn state(mut self, state: ArtifactState) -> Self {
-//         self.0.state = state;
-//         self
-//     }
+#[derive(Debug, Clone)]
+pub struct ExecutionType {
+    pub id: ExecutionTypeId,
+    pub name: String,
+    pub properties: BTreeMap<String, PropertyType>,
+    pub input_type: Option<ArtifactStructType>,
+    pub output_type: Option<ArtifactStructType>,
+}
 
-//     pub fn build(self) -> Artifact {
-//         self.0
-//     }
-// }
+#[derive(Debug, Clone)]
+pub struct NewExecutionType {
+    pub name: String,
+    pub properties: BTreeMap<String, PropertyType>,
+    pub input_type: Option<ArtifactStructType>,
+    pub output_type: Option<ArtifactStructType>,
+}
+
+impl NewExecutionType {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            properties: BTreeMap::new(),
+            input_type: None,
+            output_type: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ExecutionId(i32);
+
+impl ExecutionId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Execution {
+    pub id: ExecutionId,
+    pub name: Option<String>,
+    pub ty: ExecutionType,
+    pub last_known_state: ExecutionState,
+    pub properties: BTreeMap<String, Value>,
+    pub create_time_since_epoch: Duration,
+    pub last_update_time_since_epoch: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewExecution {
+    pub name: Option<String>,
+    pub ty: ExecutionType,
+    pub last_known_state: ExecutionState,
+    pub properties: BTreeMap<String, Value>,
+}
+
+impl NewExecution {
+    pub fn new(ty: ExecutionType) -> Self {
+        Self {
+            ty,
+            name: None,
+            last_known_state: ExecutionState::Unknown,
+            properties: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExecutionState {
+    Unknown = 0,
+    New = 1,
+    Running = 2,
+    Complete = 3,
+    Failed = 4,
+    Cached = 5,
+    Canceled = 6,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EventType {
+    Unknown = 0,
+    DeclaredOutput = 1,
+    DeclaredInput = 2,
+    Input = 3,
+    Output = 4,
+    InternalInput = 5,
+    InternalOutput = 6,
+}
+
+#[derive(Debug, Clone)]
+pub enum EventStep {
+    Index(i64),
+    Key(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct EventPath {
+    pub steps: Vec<EventStep>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Event {
+    pub artifact_id: ArtifactId,
+    pub execution_id: ExecutionId,
+    pub path: Option<EventPath>,
+    pub ty: EventType,
+    pub create_time_since_epoch: Duration,
+}
+
+impl Event {
+    pub fn new(ty: EventType, artifact_id: ArtifactId, execution_id: ExecutionId) -> Self {
+        Self {
+            ty,
+            artifact_id,
+            execution_id,
+            path: None,
+            create_time_since_epoch: UNIX_EPOCH
+                .elapsed()
+                .unwrap_or_else(|_| Duration::from_secs(0)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ContextTypeId(i32);
+
+impl ContextTypeId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ContextType {
+    pub id: ContextTypeId,
+    pub name: String,
+    pub properties: BTreeMap<String, PropertyType>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewContextType {
+    pub name: String,
+    pub properties: BTreeMap<String, PropertyType>,
+}
+
+impl NewContextType {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            properties: BTreeMap::new(),
+        }
+    }
+
+    // TODO: fn instantiate(&self) -> NewContext
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ContextId(i32);
+
+impl ContextId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Context {
+    pub ty: ContextType,
+    pub id: ContextId,
+    pub name: String,
+    pub uri: Option<String>,
+    pub properties: BTreeMap<String, Value>,
+    pub create_time_since_epoch: Duration,
+    pub last_update_time_since_epoch: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewContext {
+    pub ty: ContextType,
+    pub name: String,
+    pub properties: BTreeMap<String, Value>,
+}
+
+impl NewContext {
+    pub fn new(ty: ContextType, name: &str) -> Self {
+        Self {
+            ty,
+            name: name.to_owned(),
+            properties: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Attribution {
+    pub artifact_id: ArtifactId,
+    pub context_id: ContextId,
+}
+
+#[derive(Debug, Clone)]
+pub struct Association {
+    pub execution_id: ExecutionId,
+    pub context_id: ContextId,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParentContext {
+    pub child_id: ContextId,
+    pub parent_id: ContextId,
+}
+
+#[derive(Debug, Clone)]
+pub enum ArtifactStructType {
+    Simple(ArtifactType),
+    Union(Vec<Self>),
+    Intersection(Vec<Self>),
+    List(Box<Self>),
+    None,
+    Any,
+    Tuple(Vec<Self>),
+    Dict(BTreeMap<String, Self>),
+}
