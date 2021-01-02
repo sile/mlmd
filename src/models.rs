@@ -1,6 +1,8 @@
+use crate::schema::{Artifact, ArtifactProperty};
 use diesel::Queryable;
 
-#[derive(Debug, Clone, Queryable)]
+#[derive(Debug, Clone, Queryable, Insertable, AsChangeset)]
+#[table_name = "Artifact"]
 pub struct ArtifactModel {
     pub id: Option<i32>,
     pub type_id: i32,
@@ -11,7 +13,8 @@ pub struct ArtifactModel {
     pub last_update_time_since_epoch: i64,
 }
 
-#[derive(Debug, Clone, Queryable)]
+#[derive(Debug, Clone, Queryable, Insertable)]
+#[table_name = "ArtifactProperty"]
 pub struct ArtifactPropertyModel {
     pub artifact_id: i32,
     pub name: String,

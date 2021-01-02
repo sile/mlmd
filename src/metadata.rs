@@ -3,13 +3,39 @@ use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    Int(i64),
+    Int(i32),
     Double(f64),
     String(String),
 }
 
-impl From<i64> for Value {
-    fn from(v: i64) -> Self {
+impl Value {
+    pub fn as_int(&self) -> Option<i32> {
+        if let Self::Int(v) = &self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_double(&self) -> Option<f64> {
+        if let Self::Double(v) = &self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&String> {
+        if let Self::String(v) = &self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+impl From<i32> for Value {
+    fn from(v: i32) -> Self {
         Self::Int(v)
     }
 }
@@ -116,6 +142,7 @@ pub struct NewArtifact {
     pub uri: Option<String>,
     pub properties: BTreeMap<String, Value>,
     pub state: ArtifactState,
+    // TODO: create_time_since_epoch, last_update_time_since_epoch
 }
 
 impl NewArtifact {
