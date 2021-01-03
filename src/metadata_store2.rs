@@ -1,9 +1,10 @@
 use crate::metadata::{
-    Artifact, ArtifactId, ArtifactState, ArtifactTypeId, ConvertError, NewArtifact,
+    Artifact, ArtifactId, ArtifactState, ArtifactType, ArtifactTypeId, ConvertError, NewArtifact,
 };
 use futures::TryStreamExt;
 use sqlx::any::AnyRow;
 use sqlx::Row;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
@@ -18,11 +19,15 @@ pub enum MetadataStoreError {
 #[derive(Debug)]
 pub struct MetadataStore {
     connection: sqlx::AnyConnection,
+    artifact_types: HashMap<ArtifactTypeId, ArtifactType>,
 }
 
 impl MetadataStore {
     pub fn new(connection: sqlx::AnyConnection) -> Self {
-        Self { connection }
+        Self {
+            connection,
+            artifact_types: HashMap::new(),
+        }
     }
 
     // TODO: option
@@ -30,8 +35,28 @@ impl MetadataStore {
         let mut rows = sqlx::query("SELECT * FROM Artifact").fetch(&mut self.connection);
 
         let mut artifacts = Vec::new();
+        let mut unknown_types = HashSet::new();
         while let Some(row) = rows.try_next().await? {
-            artifacts.push(ArtifactRecord::from_row(row)?);
+            let artifact = ArtifactRecord::from_row(row)?;
+            if !self.artifact_types.contains_key(&artifact.type_id) {
+                unknown_types.insert(artifact.type_id);
+            }
+            artifacts.push(artifact);
+        }
+        std::mem::drop(rows);
+
+        let q = format!(
+            "SELECT * FROM Type WHERE id IN ({})",
+            unknown_types
+                .iter()
+                .map(|x| x.get().to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let mut rows = sqlx::query(&q).fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            let ty = TypeRecord::from_row(row)?;
+            dbg!(ty);
         }
         todo!()
     }
@@ -65,6 +90,31 @@ impl ArtifactRecord {
             last_update_time_since_epoch: Duration::from_millis(
                 last_update_time_since_epoch as u64,
             ),
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeRecord {
+    pub id: i32,
+    pub name: String,
+    pub version: Option<String>,
+    pub type_kind: bool,
+    pub description: Option<String>,
+    pub input_type: Option<String>,
+    pub output_type: Option<String>,
+}
+
+impl TypeRecord {
+    pub fn from_row(row: AnyRow) -> Result<Self, MetadataStoreError> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            version: row.try_get("version")?,
+            type_kind: row.try_get("type_kind")?,
+            description: row.try_get("description")?,
+            input_type: row.try_get("input_type")?,
+            output_type: row.try_get("output_type")?,
         })
     }
 }
