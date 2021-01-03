@@ -101,6 +101,12 @@ impl NewArtifactType {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ConvertError {
+    #[error("artifact state {value} is undefined")]
+    UndefinedArtifactState { value: i32 },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArtifactState {
     Unknown = 0,
@@ -108,6 +114,19 @@ pub enum ArtifactState {
     Live = 2,
     MarkedForDeletion = 3,
     Deleted = 4,
+}
+
+impl ArtifactState {
+    pub fn from_i32(v: i32) -> Result<Self, ConvertError> {
+        match v {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::Pending),
+            2 => Ok(Self::Live),
+            3 => Ok(Self::MarkedForDeletion),
+            4 => Ok(Self::Deleted),
+            _ => Err(ConvertError::UndefinedArtifactState { value: v }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
