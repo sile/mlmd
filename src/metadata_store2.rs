@@ -1,10 +1,11 @@
 use crate::metadata::{
     Artifact, ArtifactId, ArtifactState, ArtifactType, ArtifactTypeId, ConvertError, NewArtifact,
+    PropertyType,
 };
 use futures::TryStreamExt;
 use sqlx::any::AnyRow;
 use sqlx::Row;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
@@ -45,20 +46,63 @@ impl MetadataStore {
         }
         std::mem::drop(rows);
 
-        let q = format!(
-            "SELECT * FROM Type WHERE id IN ({})",
-            unknown_types
-                .iter()
-                .map(|x| x.get().to_string())
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-        let mut rows = sqlx::query(&q).fetch(&mut self.connection);
+        // TODO: artifact properties
+
+        let types = self
+            .get_types(
+                unknown_types.into_iter().map(|k| k.get()),
+                |ty, properties| ArtifactType {
+                    id: ArtifactTypeId::new(ty.id),
+                    name: ty.name,
+                    properties,
+                },
+            )
+            .await?;
+
+        todo!()
+    }
+
+    async fn get_types<F, T>(
+        &mut self,
+        type_ids: impl Iterator<Item = i32>,
+        f: F,
+    ) -> Result<HashMap<i32, T>, MetadataStoreError>
+    where
+        F: Fn(TypeRecord, BTreeMap<String, PropertyType>) -> T,
+    {
+        let ids_csv = type_ids
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let query = format!("SELECT * FROM Type WHERE id IN ({})", ids_csv);
+        let mut rows = sqlx::query(&query).fetch(&mut self.connection);
+        let mut types = Vec::new();
         while let Some(row) = rows.try_next().await? {
             let ty = TypeRecord::from_row(row)?;
-            dbg!(ty);
+            types.push(ty);
         }
-        todo!()
+        std::mem::drop(rows);
+
+        let query = format!("SELECT * FROM TypeProperty WHERE type_id IN ({})", ids_csv);
+        let mut rows = sqlx::query(&query).fetch(&mut self.connection);
+        let mut properties: HashMap<_, BTreeMap<_, _>> = HashMap::new();
+        while let Some(row) = rows.try_next().await? {
+            let property = TypePropertyRecord::from_row(row)?;
+            properties
+                .entry(property.type_id)
+                .or_default()
+                .insert(property.name, property.data_type);
+        }
+        std::mem::drop(rows);
+
+        Ok(types
+            .into_iter()
+            .map(move |ty| {
+                let id = ty.id;
+                (id, f(ty, properties.remove(&id).unwrap_or_default()))
+            })
+            .collect())
     }
     // pub fn post_artifact(&self, artifact: &NewArtifact) -> Result<ArtifactId, MetadataStoreError> {
     //     todo!()
@@ -115,6 +159,23 @@ impl TypeRecord {
             description: row.try_get("description")?,
             input_type: row.try_get("input_type")?,
             output_type: row.try_get("output_type")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TypePropertyRecord {
+    pub type_id: i32,
+    pub name: String,
+    pub data_type: PropertyType,
+}
+
+impl TypePropertyRecord {
+    pub fn from_row(row: AnyRow) -> Result<Self, MetadataStoreError> {
+        Ok(Self {
+            type_id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            data_type: PropertyType::from_i32(row.try_get("data_type")?)?,
         })
     }
 }

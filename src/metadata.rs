@@ -66,6 +66,18 @@ pub enum PropertyType {
     String = 3,
 }
 
+impl PropertyType {
+    pub fn from_i32(value: i32) -> Result<Self, ConvertError> {
+        match value {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::Int),
+            2 => Ok(Self::Double),
+            3 => Ok(Self::String),
+            _ => Err(ConvertError::UndefinedPropertyType { value }),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArtifactTypeId(i32);
 
@@ -105,6 +117,9 @@ impl NewArtifactType {
 pub enum ConvertError {
     #[error("artifact state {value} is undefined")]
     UndefinedArtifactState { value: i32 },
+
+    #[error("property type {value} is undefined")]
+    UndefinedPropertyType { value: i32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
