@@ -1,6 +1,6 @@
 use crate::metadata::{
     Artifact, ArtifactId, ArtifactState, ArtifactType, ArtifactTypeId, ConvertError, NewArtifact,
-    PropertyType,
+    PropertyType, Value,
 };
 use futures::TryStreamExt;
 use sqlx::any::AnyRow;
@@ -10,6 +10,9 @@ use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MetadataStoreError {
+    #[error("bug")]
+    Bug,
+
     #[error("database error")]
     Db(#[from] sqlx::Error),
 
@@ -44,9 +47,21 @@ impl MetadataStore {
             }
             artifacts.push(artifact);
         }
+        artifacts.sort_by_key(|a| a.id);
         std::mem::drop(rows);
 
-        // TODO: artifact properties
+        // TODO: IN
+        let mut rows = sqlx::query("SELECT * FROM ArtifactProperty").fetch(&mut self.connection);
+        let mut properties: HashMap<_, BTreeMap<_, _>> = HashMap::new();
+        while let Some(row) = rows.try_next().await? {
+            let property = ArtifactPropertyRecord::from_row(row)?;
+            let value = property.value()?;
+            properties
+                .entry(property.artifact_id)
+                .or_default()
+                .insert(property.name, value);
+        }
+        std::mem::drop(rows);
 
         let types = self
             .get_types(
@@ -59,7 +74,19 @@ impl MetadataStore {
             )
             .await?;
 
-        todo!()
+        Ok(artifacts
+            .into_iter()
+            .map(move |artifact| Artifact {
+                ty: types[&artifact.id.get()].clone(),
+                id: artifact.id,
+                name: artifact.name,
+                uri: artifact.uri,
+                properties: properties.remove(&artifact.id).unwrap_or_default(),
+                state: artifact.state,
+                create_time_since_epoch: artifact.create_time_since_epoch,
+                last_update_time_since_epoch: artifact.last_update_time_since_epoch,
+            })
+            .collect())
     }
 
     async fn get_types<F, T>(
@@ -139,6 +166,42 @@ impl ArtifactRecord {
 }
 
 #[derive(Debug, Clone)]
+pub struct ArtifactPropertyRecord {
+    pub artifact_id: ArtifactId,
+    pub name: String,
+    pub is_custom_property: bool,
+    pub int_value: Option<i32>,
+    pub double_value: Option<f64>,
+    pub string_value: Option<String>,
+}
+
+impl ArtifactPropertyRecord {
+    pub fn from_row(row: AnyRow) -> Result<Self, MetadataStoreError> {
+        Ok(Self {
+            artifact_id: ArtifactId::new(row.try_get("artifact_id")?),
+            name: row.try_get("name")?,
+            is_custom_property: row.try_get("is_custom_property")?,
+            int_value: row.try_get("int_value")?,
+            double_value: row.try_get("double_value")?,
+            string_value: row.try_get("string_value")?,
+        })
+    }
+
+    pub fn value(&self) -> Result<Value, MetadataStoreError> {
+        if let Some(v) = self.int_value {
+            Ok(Value::Int(v))
+        } else if let Some(v) = self.double_value {
+            Ok(Value::Double(v))
+        } else if let Some(v) = self.string_value.clone() {
+            // TODO: move
+            Ok(Value::String(v))
+        } else {
+            Err(MetadataStoreError::Bug)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct TypeRecord {
     pub id: i32,
     pub name: String,
@@ -173,7 +236,7 @@ pub struct TypePropertyRecord {
 impl TypePropertyRecord {
     pub fn from_row(row: AnyRow) -> Result<Self, MetadataStoreError> {
         Ok(Self {
-            type_id: row.try_get("id")?,
+            type_id: row.try_get("type_id")?,
             name: row.try_get("name")?,
             data_type: PropertyType::from_i32(row.try_get("data_type")?)?,
         })
@@ -189,7 +252,8 @@ mod tests {
     async fn get_artifacts_by_id_works() -> anyhow::Result<()> {
         let connection = sqlx::AnyConnection::connect("sqlite://tests/test.db").await?;
         let mut store = MetadataStore::new(connection);
-        store.get_artifacts().await?;
+        let artifacts = store.get_artifacts().await?;
+        assert_eq!(artifacts.len(), 2);
         Ok(())
     }
 }
