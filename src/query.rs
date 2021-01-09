@@ -29,6 +29,22 @@ impl Query {
     pub fn insert_schema_version(&self) -> &'static str {
         "INSERT INTO MLMDEnv VALUES ($1)"
     }
+
+    pub fn get_artifact_type(&self) -> &'static str {
+        "SELECT id FROM Type WHERE name=$1 AND type_kind=0"
+    }
+
+    pub fn get_artifact_type_properties(&self) -> &'static str {
+        "SELECT name, data_type FROM TypeProperty WHERE type_id=$1"
+    }
+
+    pub fn insert_artifact_type(&self) -> &'static str {
+        "INSERT INTO Type (name, type_kind) VALUES ($1, 0)"
+    }
+
+    pub fn insert_artifact_type_property(&self) -> &'static str {
+        "INSERT INTO TypeProperty (type_id, name, data_type) VALUES ($1, $2, $3)"
+    }
 }
 
 #[derive(Debug, Clone)]

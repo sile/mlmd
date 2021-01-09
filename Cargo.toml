@@ -12,6 +12,5 @@ sqlx =  { version = "0.4", features = ["any", "mysql", "sqlite", "runtime-async-
 thiserror = "1"
 
 [dev-dependencies]
-anyhow = "1"
 async-std = { version = "1", features = ["attributes"] }
 tempfile = "3"

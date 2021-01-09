@@ -1,8 +1,20 @@
-use crate::metadata::{ArtifactType, PropertyType};
+use crate::metadata::{ArtifactType, ConvertError, Id, PropertyType};
 use crate::query::Query;
-use sqlx::any::AnyRow;
-use sqlx::{AnyConnection, Connection as _, Row as _};
+use sqlx::{AnyConnection, Connection as _, Executor as _, Row as _};
 use std::collections::BTreeMap;
+
+macro_rules! transaction {
+    ($connection:expr, $block:expr) => {{
+        $connection.execute("BEGIN").await?;
+        let result = $block;
+        if result.is_ok() {
+            $connection.execute("COMMIT").await?;
+        } else {
+            $connection.execute("ROLLBACK").await?;
+        }
+        result
+    }};
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitError {
@@ -87,15 +99,92 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub fn put_artifact_type(
+    pub async fn put_artifact_type(
         &mut self,
         type_name: &str,
         options: PutArtifactTypeOptions,
-    ) -> Result<ArtifactType, PutError> {
-        todo!()
+    ) -> Result<Id, PutError> {
+        transaction!(
+            self.connection,
+            self.put_artifact_type_without_transaction(type_name, options)
+                .await
+        )
     }
 
-    pub fn get_artifact_type(&mut self, type_name: &str) -> Result<ArtifactType, GetError> {
+    async fn put_artifact_type_without_transaction(
+        &mut self,
+        type_name: &str,
+        mut options: PutArtifactTypeOptions,
+    ) -> Result<Id, PutError> {
+        let this = self;
+
+        #[derive(Debug, sqlx::FromRow)]
+        struct Type {
+            id: i32,
+        }
+
+        #[derive(Debug, sqlx::FromRow)]
+        struct Property {
+            name: String,
+            data_type: i32,
+        }
+
+        let ty = sqlx::query_as::<_, Type>(this.query.get_artifact_type())
+            .bind(type_name)
+            .fetch_optional(&mut this.connection)
+            .await?;
+        let ty = if let Some(ty) = ty {
+            let properties =
+                sqlx::query_as::<_, Property>(this.query.get_artifact_type_properties())
+                    .bind(ty.id)
+                    .fetch_all(&mut this.connection)
+                    .await?;
+
+            for property in properties {
+                match options.properties.remove(&property.name) {
+                    None if options.can_omit_fields => {}
+                    Some(v) if v as i32 == property.data_type => {}
+                    _ => {
+                        return Err(PutError::TypeAlreadyExists {
+                            kind: "artifact".to_owned(),
+                            name: type_name.to_owned(),
+                        });
+                    }
+                }
+            }
+            if !options.properties.is_empty() && !options.can_add_fields {
+                return Err(PutError::TypeAlreadyExists {
+                    kind: "artifact".to_owned(),
+                    name: type_name.to_owned(),
+                });
+            }
+
+            ty
+        } else {
+            sqlx::query(this.query.insert_artifact_type())
+                .bind(type_name)
+                .execute(&mut this.connection)
+                .await?;
+
+            let ty = sqlx::query_as::<_, Type>(this.query.get_artifact_type())
+                .bind(type_name)
+                .fetch_one(&mut this.connection)
+                .await?;
+            ty
+        };
+        for (name, value) in &options.properties {
+            sqlx::query(this.query.insert_artifact_type_property())
+                .bind(ty.id)
+                .bind(name)
+                .bind(*value as i32)
+                .execute(&mut this.connection)
+                .await?;
+        }
+
+        Ok(Id::new(ty.id))
+    }
+
+    pub async fn get_artifact_type(&mut self, type_name: &str) -> Result<ArtifactType, GetError> {
         todo!()
     }
 
@@ -139,12 +228,24 @@ impl MetadataStore {
 
 #[derive(Debug, thiserror::Error)]
 pub enum GetError {
+    #[error("database error")]
+    Db(#[from] sqlx::Error),
+
     #[error("{target} is not found")]
     NotFound { target: String },
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum PutError {}
+pub enum PutError {
+    #[error("database error")]
+    Db(#[from] sqlx::Error),
+
+    #[error("conversion error")]
+    Convert(#[from] ConvertError),
+
+    #[error("{kind} type with the name {name} already exists")]
+    TypeAlreadyExists { kind: String, name: String },
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct PutArtifactTypeOptions {
@@ -168,48 +269,18 @@ impl PutArtifactTypeOptions {
         self.properties.insert(key.to_owned(), value_type);
         self
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct TypeRecord {
-    pub id: i32,
-    pub name: String,
-    pub version: Option<String>,
-    pub type_kind: bool,
-    pub description: Option<String>,
-    pub input_type: Option<String>,
-    pub output_type: Option<String>,
-}
+    pub fn property_int(self, key: &str) -> Self {
+        self.property(key, PropertyType::Int)
+    }
 
-impl TypeRecord {
-    // pub fn from_row(row: AnyRow) -> Result<Self,  MetadataStoreError> {
-    //     Ok(Self {
-    //         id: row.try_get("id")?,
-    //         name: row.try_get("name")?,
-    //         version: row.try_get("version")?,
-    //         type_kind: row.try_get("type_kind")?,
-    //         description: row.try_get("description")?,
-    //         input_type: row.try_get("input_type")?,
-    //         output_type: row.try_get("output_type")?,
-    //     })
-    // }
-}
+    pub fn property_double(self, key: &str) -> Self {
+        self.property(key, PropertyType::Double)
+    }
 
-#[derive(Debug, Clone)]
-pub struct TypePropertyRecord {
-    pub type_id: i32,
-    pub name: String,
-    pub data_type: PropertyType,
-}
-
-impl TypePropertyRecord {
-    // pub fn from_row(row: AnyRow) -> Result<Self, MetadataStoreError> {
-    //     Ok(Self {
-    //         type_id: row.try_get("type_id")?,
-    //         name: row.try_get("name")?,
-    //         data_type: PropertyType::from_i32(row.try_get("data_type")?)?,
-    //     })
-    // }
+    pub fn property_string(self, key: &str) -> Self {
+        self.property(key, PropertyType::String)
+    }
 }
 
 #[cfg(test)]
@@ -218,20 +289,87 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[async_std::test]
-    async fn initialization_works() -> anyhow::Result<()> {
-        // Open an existing database.
-        MetadataStore::new("sqlite://tests/test.db").await?;
-
+    async fn initialization_works() {
         // Create a new database.
-        let file = NamedTempFile::new()?;
-        let path = format!(
-            "sqlite://{}",
-            file.path()
-                .to_str()
-                .ok_or_else(|| anyhow::anyhow!("invalid path"))?
-        );
-        MetadataStore::new(&path).await?;
+        let file = NamedTempFile::new().unwrap();
+        MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
-        Ok(())
+        // Open an existing database.
+        let file = existing_db();
+        MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+    }
+
+    #[async_std::test]
+    async fn put_artifact_type_works() {
+        let file = NamedTempFile::new().unwrap();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+        let options = PutArtifactTypeOptions::default();
+        store
+            .put_artifact_type("t0", options.clone().property_int("p0"))
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            store
+                .put_artifact_type("t0", options.clone().property_double("p0"))
+                .await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+
+        assert!(matches!(
+            store
+                .put_artifact_type(
+                    "t0",
+                    options.clone().property_int("p0").property_string("p1")
+                )
+                .await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+        store
+            .put_artifact_type(
+                "t0",
+                options
+                    .clone()
+                    .can_add_fields()
+                    .property_int("p0")
+                    .property_string("p1"),
+            )
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            store.put_artifact_type("t0", options.clone()).await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+        store
+            .put_artifact_type("t0", options.clone().can_omit_fields())
+            .await
+            .unwrap();
+
+        store
+            .put_artifact_type("t1", options.clone())
+            .await
+            .unwrap();
+    }
+
+    fn sqlite_uri(path: impl AsRef<std::path::Path>) -> String {
+        format!(
+            "sqlite://{}",
+            path.as_ref()
+                .to_str()
+                .ok_or_else(|| format!("invalid path: {:?}", path.as_ref()))
+                .unwrap()
+        )
+    }
+
+    fn existing_db() -> NamedTempFile {
+        let mut file = NamedTempFile::new().expect("cannot create a temporary file");
+        std::io::copy(
+            &mut std::fs::File::open("tests/test.db").expect("cannot open 'tests/test.db'"),
+            &mut file,
+        )
+        .expect("cannot copy the existing database file");
+        file
     }
 }
