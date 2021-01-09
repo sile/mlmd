@@ -34,6 +34,46 @@ impl MetadataStore {
         }
     }
 
+    // pub fn put_artifact_type(
+    //     &mut self,
+    //     artifact_type: &ArtifactType,
+    //     options: PutTypeOptions,
+    // ) -> i32 {
+    //     todo!()
+    // }
+
+    pub fn get_artifact_by_type_and_name(
+        &mut self,
+        _type_name: &str,
+        _artifact_name: &str,
+    ) -> Option<Artifact> {
+        todo!()
+    }
+
+    pub fn get_artifact_type(&mut self, _type_name: &str) -> ArtifactType {
+        todo!()
+    }
+
+    pub fn get_artifact_types_by_id(&mut self, type_ids: &[i32]) -> Vec<ArtifactType> {
+        todo!()
+    }
+
+    pub fn get_artifacts_by_context(&mut self, context_id: i32) -> Vec<Artifact> {
+        todo!()
+    }
+
+    pub fn get_artifacts_by_id(&mut self, artifact_ids: &[i32]) -> Vec<Artifact> {
+        todo!()
+    }
+
+    pub fn get_artifacts_by_type(&mut self, type_name: &str) -> Vec<Artifact> {
+        todo!()
+    }
+
+    pub fn get_artifacts_by_uri(&mut self, uri: &str) -> Vec<Artifact> {
+        todo!()
+    }
+
     // TODO: option
     pub async fn get_artifacts(&mut self) -> Result<Vec<Artifact>, MetadataStoreError> {
         let mut rows = sqlx::query("SELECT * FROM Artifact").fetch(&mut self.connection);
