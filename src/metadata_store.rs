@@ -1,8 +1,11 @@
-use crate::metadata::{ArtifactType, ConvertError, Id, PropertyType};
+use self::errors::{GetError, InitError, PutError};
+use crate::metadata::{ArtifactType, Id, PropertyType};
 use crate::query::Query;
 use futures::TryStreamExt as _;
 use sqlx::{AnyConnection, Connection as _, Executor as _, Row as _};
 use std::collections::BTreeMap;
+
+mod errors;
 
 macro_rules! transaction {
     ($connection:expr, $block:expr) => {{
@@ -15,21 +18,6 @@ macro_rules! transaction {
         }
         result
     }};
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum InitError {
-    #[error("database error")]
-    Db(#[from] sqlx::Error),
-
-    #[error("only SQLite or MySQL are supported by ml-metadata")]
-    UnsupportedDatabase,
-
-    #[error("schema version {actual} is not supported (expected version is {expected})")]
-    UnsupportedSchemaVersion { actual: i32, expected: i32 },
-
-    #[error("there are {count} MLMDEnv records (only one record is expected)")]
-    TooManyMlmdEnvRecords { count: usize },
 }
 
 const SCHEMA_VERSION: i32 = 6;
@@ -260,30 +248,6 @@ impl MetadataStore {
 
         Ok(types.into_iter().map(|(_, v)| v).collect())
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum GetError {
-    #[error("database error")]
-    Db(#[from] sqlx::Error),
-
-    #[error("conversion error")]
-    Convert(#[from] ConvertError),
-
-    #[error("{target} is not found")]
-    NotFound { target: String },
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum PutError {
-    #[error("database error")]
-    Db(#[from] sqlx::Error),
-
-    #[error("conversion error")]
-    Convert(#[from] ConvertError),
-
-    #[error("{kind} type with the name {name} already exists")]
-    TypeAlreadyExists { kind: String, name: String },
 }
 
 #[derive(Debug, Default, Clone)]
