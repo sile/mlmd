@@ -1,4 +1,5 @@
 use self::errors::{GetError, InitError, PutError};
+use self::options::PutArtifactTypeOptions;
 use crate::metadata::{ArtifactType, Id, PropertyType};
 use crate::query::Query;
 use futures::TryStreamExt as _;
@@ -6,6 +7,7 @@ use sqlx::{AnyConnection, Connection as _, Executor as _, Row as _};
 use std::collections::BTreeMap;
 
 mod errors;
+mod options;
 
 macro_rules! transaction {
     ($connection:expr, $block:expr) => {{
@@ -247,42 +249,6 @@ impl MetadataStore {
         }
 
         Ok(types.into_iter().map(|(_, v)| v).collect())
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct PutArtifactTypeOptions {
-    can_add_fields: bool,
-    can_omit_fields: bool,
-    properties: BTreeMap<String, PropertyType>,
-}
-
-impl PutArtifactTypeOptions {
-    pub fn can_add_fields(mut self) -> Self {
-        self.can_add_fields = true;
-        self
-    }
-
-    pub fn can_omit_fields(mut self) -> Self {
-        self.can_omit_fields = true;
-        self
-    }
-
-    pub fn property(mut self, key: &str, value_type: PropertyType) -> Self {
-        self.properties.insert(key.to_owned(), value_type);
-        self
-    }
-
-    pub fn property_int(self, key: &str) -> Self {
-        self.property(key, PropertyType::Int)
-    }
-
-    pub fn property_double(self, key: &str) -> Self {
-        self.property(key, PropertyType::Double)
-    }
-
-    pub fn property_string(self, key: &str) -> Self {
-        self.property(key, PropertyType::String)
     }
 }
 
