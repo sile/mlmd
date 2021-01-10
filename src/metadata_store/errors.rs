@@ -38,3 +38,12 @@ pub enum PutError {
     #[error("{kind} type with the name {name} already exists")]
     TypeAlreadyExists { kind: &'static str, name: String },
 }
+
+#[derive(Debug, thiserror::Error)]
+pub enum PostError {
+    #[error("database error")]
+    Db(#[from] sqlx::Error),
+
+    #[error("conversion error")]
+    Convert(#[from] ConvertError),
+}

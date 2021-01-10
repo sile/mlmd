@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Id(i32);
@@ -40,6 +41,9 @@ pub enum ConvertError {
 
     #[error("property type {value} is undefined")]
     UndefinedPropertyType { value: i32 },
+
+    #[error("wrong property value")]
+    WrongPropertyValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -64,133 +68,97 @@ pub struct ContextType {
     pub properties: BTreeMap<String, PropertyType>,
 }
 
-// use std::time::{Duration, UNIX_EPOCH};
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    Int(i32),
+    Double(f64),
+    String(String),
+}
 
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum Value {
-//     Int(i32),
-//     Double(f64),
-//     String(String),
-// }
+impl Value {
+    pub fn as_int(&self) -> Option<i32> {
+        if let Self::Int(v) = &self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
 
-// impl Value {
-//     pub fn as_int(&self) -> Option<i32> {
-//         if let Self::Int(v) = &self {
-//             Some(*v)
-//         } else {
-//             None
-//         }
-//     }
+    pub fn as_double(&self) -> Option<f64> {
+        if let Self::Double(v) = &self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
 
-//     pub fn as_double(&self) -> Option<f64> {
-//         if let Self::Double(v) = &self {
-//             Some(*v)
-//         } else {
-//             None
-//         }
-//     }
+    pub fn as_string(&self) -> Option<&String> {
+        if let Self::String(v) = &self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
 
-//     pub fn as_string(&self) -> Option<&String> {
-//         if let Self::String(v) = &self {
-//             Some(v)
-//         } else {
-//             None
-//         }
-//     }
-// }
+impl From<i32> for Value {
+    fn from(v: i32) -> Self {
+        Self::Int(v)
+    }
+}
 
-// impl From<i32> for Value {
-//     fn from(v: i32) -> Self {
-//         Self::Int(v)
-//     }
-// }
+impl From<f64> for Value {
+    fn from(v: f64) -> Self {
+        Self::Double(v)
+    }
+}
 
-// impl From<f64> for Value {
-//     fn from(v: f64) -> Self {
-//         Self::Double(v)
-//     }
-// }
+impl From<String> for Value {
+    fn from(v: String) -> Self {
+        Self::String(v)
+    }
+}
 
-// impl From<String> for Value {
-//     fn from(v: String) -> Self {
-//         Self::String(v)
-//     }
-// }
+impl<'a> From<&'a str> for Value {
+    fn from(v: &'a str) -> Self {
+        Self::String(v.to_owned())
+    }
+}
 
-// impl<'a> From<&'a str> for Value {
-//     fn from(v: &'a str) -> Self {
-//         Self::String(v.to_owned())
-//     }
-// }
+#[derive(Debug, Clone, PartialEq)]
+pub struct Artifact {
+    pub id: Id,
+    pub type_id: Id,
+    pub name: Option<String>,
+    pub uri: Option<String>,
+    pub properties: BTreeMap<String, Value>,
+    pub custom_properties: BTreeMap<String, Value>,
+    pub state: ArtifactState,
+    pub create_time_since_epoch: Duration,
+    pub last_update_time_since_epoch: Duration,
+}
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-// pub enum ArtifactState {
-//     Unknown = 0,
-//     Pending = 1,
-//     Live = 2,
-//     MarkedForDeletion = 3,
-//     Deleted = 4,
-// }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ArtifactState {
+    Unknown = 0,
+    Pending = 1,
+    Live = 2,
+    MarkedForDeletion = 3,
+    Deleted = 4,
+}
 
-// impl ArtifactState {
-//     pub fn from_i32(v: i32) -> Result<Self, ConvertError> {
-//         match v {
-//             0 => Ok(Self::Unknown),
-//             1 => Ok(Self::Pending),
-//             2 => Ok(Self::Live),
-//             3 => Ok(Self::MarkedForDeletion),
-//             4 => Ok(Self::Deleted),
-//             _ => Err(ConvertError::UndefinedArtifactState { value: v }),
-//         }
-//     }
-// }
-
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct ArtifactId(i32);
-
-// impl ArtifactId {
-//     pub const fn new(id: i32) -> Self {
-//         Self(id)
-//     }
-
-//     pub const fn get(self) -> i32 {
-//         self.0
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct Artifact {
-//     pub ty: ArtifactType,
-//     pub id: ArtifactId,
-//     pub name: Option<String>,
-//     pub uri: Option<String>,
-//     pub properties: BTreeMap<String, Value>,
-//     pub state: ArtifactState,
-//     pub create_time_since_epoch: Duration,
-//     pub last_update_time_since_epoch: Duration,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct NewArtifact {
-//     pub ty: ArtifactType,
-//     pub name: Option<String>,
-//     pub uri: Option<String>,
-//     pub properties: BTreeMap<String, Value>,
-//     pub state: ArtifactState,
-//     // TODO: create_time_since_epoch, last_update_time_since_epoch
-// }
-
-// impl NewArtifact {
-//     pub fn new(ty: ArtifactType) -> Self {
-//         Self {
-//             ty,
-//             name: None,
-//             uri: None,
-//             properties: BTreeMap::new(),
-//             state: ArtifactState::Unknown,
-//         }
-//     }
-// }
+impl ArtifactState {
+    pub fn from_i32(v: i32) -> Result<Self, ConvertError> {
+        match v {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::Pending),
+            2 => Ok(Self::Live),
+            3 => Ok(Self::MarkedForDeletion),
+            4 => Ok(Self::Deleted),
+            _ => Err(ConvertError::UndefinedArtifactState { value: v }),
+        }
+    }
+}
 
 // #[derive(Debug, Clone)]
 // pub struct Execution {

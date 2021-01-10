@@ -1,4 +1,5 @@
 use super::*;
+use crate::metadata::Value;
 use tempfile::NamedTempFile;
 
 #[async_std::test]
@@ -111,8 +112,51 @@ async fn get_artifact_types_works() {
     let file = existing_db();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
     let types = store.get_artifact_types().await.unwrap();
-    assert_eq!(types.len(), 1);
-    assert_eq!(types[0].name, "Trainer");
+    assert_eq!(types.len(), 2);
+    assert_eq!(types[0].name, "DataSet");
+    assert_eq!(types[1].name, "SavedModel");
+}
+
+#[async_std::test]
+async fn get_artifacts_works() {
+    let file = existing_db();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+    let options = GetArtifactsOptions::default();
+
+    // All.
+    let artifacts = store.get_artifacts(options.clone()).await.unwrap();
+    assert_eq!(artifacts, vec![artifact0(), artifact1()]);
+
+    // By type name.
+    let artifacts = store
+        .get_artifacts(options.clone().ty("DataSet"))
+        .await
+        .unwrap();
+    assert_eq!(artifacts, vec![artifact0()]);
+
+    // By ID.
+    let unregistered_id = Id::new(100);
+    let artifacts = store
+        .get_artifacts(options.clone().ids(&[Id::new(2), unregistered_id]))
+        .await
+        .unwrap();
+    assert_eq!(artifacts[0].id, Id::new(2));
+    assert_eq!(artifacts, vec![artifact1()]);
+
+    // By URI.
+    let artifacts = store
+        .get_artifacts(options.clone().uri("path/to/model/file"))
+        .await
+        .unwrap();
+    assert_eq!(artifacts, vec![artifact1()]);
+
+    // By Context.
+    let artifacts = store
+        .get_artifacts(options.clone().context(Id::new(1)))
+        .await
+        .unwrap();
+    assert_eq!(artifacts, vec![artifact1()]);
 }
 
 #[async_std::test]
@@ -214,9 +258,8 @@ async fn get_execution_types_works() {
     let file = existing_db();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
     let types = store.get_execution_types().await.unwrap();
-    assert_eq!(types.len(), 2);
-    assert_eq!(types[0].name, "DataSet");
-    assert_eq!(types[1].name, "SavedModel");
+    assert_eq!(types.len(), 1);
+    assert_eq!(types[0].name, "Trainer");
 }
 
 #[async_std::test]
@@ -334,4 +377,42 @@ fn existing_db() -> NamedTempFile {
     )
     .expect("cannot copy the existing database file");
     file
+}
+
+fn artifact0() -> Artifact {
+    Artifact {
+        id: Id::new(1),
+        type_id: Id::new(1),
+        name: None,
+        uri: Some("path/to/data".to_owned()),
+        properties: vec![
+            ("day".to_owned(), Value::Int(1)),
+            ("split".to_owned(), Value::String("train".to_owned())),
+        ]
+        .into_iter()
+        .collect(),
+        custom_properties: BTreeMap::new(),
+        state: ArtifactState::Unknown,
+        create_time_since_epoch: Duration::from_millis(1609134222018),
+        last_update_time_since_epoch: Duration::from_millis(1609134222239),
+    }
+}
+
+fn artifact1() -> Artifact {
+    Artifact {
+        id: Id::new(2),
+        type_id: Id::new(2),
+        name: None,
+        uri: Some("path/to/model/file".to_owned()),
+        properties: vec![
+            ("name".to_owned(), Value::String("MNIST-v1".to_owned())),
+            ("version".to_owned(), Value::Int(1)),
+        ]
+        .into_iter()
+        .collect(),
+        custom_properties: BTreeMap::new(),
+        state: ArtifactState::Unknown,
+        create_time_since_epoch: Duration::from_millis(1609134223250),
+        last_update_time_since_epoch: Duration::from_millis(1609134223518),
+    }
 }

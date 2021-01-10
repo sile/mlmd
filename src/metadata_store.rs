@@ -1,13 +1,16 @@
-use self::errors::{GetError, InitError, PutError};
-use self::options::PutTypeOptions;
-use crate::metadata::{ArtifactType, ContextType, ExecutionType, Id, PropertyType};
+use self::errors::{GetError, InitError, PostError, PutError};
+use self::options::{GetArtifactsOptions, PostArtifactOptions, PutTypeOptions};
+use crate::metadata::{
+    Artifact, ArtifactState, ArtifactType, ContextType, ExecutionType, Id, PropertyType,
+};
 use crate::query::{self, Query, TypeKind};
 use futures::TryStreamExt as _;
 use sqlx::{AnyConnection, Connection as _, Executor as _, Row as _};
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 mod errors;
-mod options;
+pub mod options;
 #[cfg(test)]
 mod tests;
 
@@ -49,49 +52,6 @@ impl MetadataStore {
         Ok(this)
     }
 
-    async fn initialize_database(&mut self) -> Result<(), InitError> {
-        if sqlx::query(self.query.select_schema_version())
-            .fetch_all(&mut self.connection)
-            .await
-            .is_ok()
-        {
-            return Ok(());
-        }
-
-        for query in self.query.create_tables() {
-            sqlx::query(query).execute(&mut self.connection).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn check_schema_version(&mut self) -> Result<(), InitError> {
-        let rows = sqlx::query(self.query.select_schema_version())
-            .fetch_all(&mut self.connection)
-            .await?;
-
-        if rows.is_empty() {
-            sqlx::query(self.query.insert_schema_version())
-                .bind(SCHEMA_VERSION)
-                .execute(&mut self.connection)
-                .await?;
-            return Ok(());
-        }
-
-        if rows.len() > 1 {
-            return Err(InitError::TooManyMlmdEnvRecords { count: rows.len() });
-        }
-
-        let version: i32 = rows[0].try_get("schema_version")?;
-        if version != SCHEMA_VERSION {
-            return Err(InitError::UnsupportedSchemaVersion {
-                actual: version,
-                expected: SCHEMA_VERSION,
-            });
-        }
-        Ok(())
-    }
-
     pub async fn put_artifact_type(
         &mut self,
         type_name: &str,
@@ -103,6 +63,7 @@ impl MetadataStore {
         )
     }
 
+    // TODO: get_artifact_types(&mut self, options: GetTypeOptions) -> Result<Vec<ArtifactType>, GetError>>
     pub async fn get_artifact_type(&mut self, type_name: &str) -> Result<ArtifactType, GetError> {
         let (id, properties) = self.get_type(TypeKind::Artifact, type_name).await?;
         Ok(ArtifactType {
@@ -183,6 +144,129 @@ impl MetadataStore {
             })
             .await?;
         Ok(types)
+    }
+
+    pub async fn post_artifact(
+        &mut self,
+        _type_id: Id,
+        _options: PostArtifactOptions,
+    ) -> Result<Id, PostError> {
+        todo!()
+    }
+
+    pub async fn put_artifact(&mut self, _artifact: &Artifact) -> Result<(), PutError> {
+        todo!()
+    }
+
+    pub async fn get_artifact(&mut self, artifact_id: Id) -> Result<Option<Artifact>, GetError> {
+        let artifacts = self
+            .get_artifacts(GetArtifactsOptions::default().ids(&[artifact_id]))
+            .await?;
+        Ok(artifacts.into_iter().nth(0))
+    }
+
+    pub async fn get_artifacts(
+        &mut self,
+        options: GetArtifactsOptions,
+    ) -> Result<Vec<Artifact>, GetError> {
+        let sql = self.query.get_artifacts(&options);
+        let mut query = sqlx::query_as::<_, query::Artifact>(&sql);
+        for v in options.values() {
+            match v {
+                query::QueryValue::Str(v) => {
+                    query = query.bind(v);
+                }
+                query::QueryValue::Int(v) => {
+                    query = query.bind(v);
+                }
+            }
+        }
+
+        let mut artifacts = BTreeMap::new();
+        let mut rows = query.fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            artifacts.insert(
+                row.id,
+                Artifact {
+                    id: Id::new(row.id),
+                    type_id: Id::new(row.type_id),
+                    name: row.name,
+                    uri: row.uri,
+                    properties: BTreeMap::new(),
+                    custom_properties: BTreeMap::new(),
+                    state: ArtifactState::from_i32(row.state)?,
+                    create_time_since_epoch: Duration::from_millis(
+                        row.create_time_since_epoch as u64,
+                    ),
+                    last_update_time_since_epoch: Duration::from_millis(
+                        row.last_update_time_since_epoch as u64,
+                    ),
+                },
+            );
+        }
+        std::mem::drop(rows);
+
+        let sql = self.query.get_artifact_properties(artifacts.len());
+        let mut query = sqlx::query_as::<_, query::ArtifactProperty>(&sql);
+        for id in artifacts.keys() {
+            query = query.bind(*id);
+        }
+        let mut rows = query.fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            let artifact = artifacts.get_mut(&row.artifact_id).expect("bug");
+            let is_custom_property = row.is_custom_property;
+            let (name, value) = row.into_name_and_vaue()?;
+            if is_custom_property {
+                artifact.custom_properties.insert(name, value);
+            } else {
+                artifact.properties.insert(name, value);
+            }
+        }
+
+        Ok(artifacts.into_iter().map(|(_, v)| v).collect())
+    }
+
+    async fn initialize_database(&mut self) -> Result<(), InitError> {
+        if sqlx::query(self.query.select_schema_version())
+            .fetch_all(&mut self.connection)
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        for query in self.query.create_tables() {
+            sqlx::query(query).execute(&mut self.connection).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn check_schema_version(&mut self) -> Result<(), InitError> {
+        let rows = sqlx::query(self.query.select_schema_version())
+            .fetch_all(&mut self.connection)
+            .await?;
+
+        if rows.is_empty() {
+            sqlx::query(self.query.insert_schema_version())
+                .bind(SCHEMA_VERSION)
+                .execute(&mut self.connection)
+                .await?;
+            return Ok(());
+        }
+
+        if rows.len() > 1 {
+            return Err(InitError::TooManyMlmdEnvRecords { count: rows.len() });
+        }
+
+        let version: i32 = rows[0].try_get("schema_version")?;
+        if version != SCHEMA_VERSION {
+            return Err(InitError::UnsupportedSchemaVersion {
+                actual: version,
+                expected: SCHEMA_VERSION,
+            });
+        }
+        Ok(())
     }
 
     async fn put_type(

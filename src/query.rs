@@ -1,4 +1,6 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
+use crate::metadata::{ConvertError, Value};
+use crate::metadata_store::options::GetArtifactsOptions;
 
 #[derive(Debug, Clone)]
 pub enum Query {
@@ -52,6 +54,69 @@ impl Query {
 
     pub fn insert_type_property(&self) -> &'static str {
         "INSERT INTO TypeProperty (type_id, name, data_type) VALUES ($1, $2, $3)"
+    }
+
+    pub fn get_artifact_properties(&self, n_ids: usize) -> String {
+        format!(
+            concat!(
+                "SELECT artifact_id, name, is_custom_property, int_value, double_value, string_value ",
+                "FROM ArtifactProperty ",
+                "WHERE artifact_id IN ({})"
+            ),
+            (1..=n_ids)
+                .map(|n| format!("${}", n))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
+
+    pub fn get_artifacts(&self, options: &GetArtifactsOptions) -> String {
+        let mut query = concat!(
+            "SELECT ",
+            "A.id, A.type_id, A.name, A.uri, A.state, A.create_time_since_epoch, A.last_update_time_since_epoch ",
+            "FROM Artifact as A ",
+        ).to_owned();
+
+        if options.type_name.is_some() {
+            query += "JOIN Type as T ON A.type_id = T.id ";
+        };
+        if options.context_id.is_some() {
+            query += "JOIN Attribution as C ON A.id = C.artifact_id ";
+        }
+
+        let mut i = 1;
+        let mut conditions = Vec::new();
+        if options.type_name.is_some() {
+            conditions.push(format!("T.name = ${}", i));
+            i += 1;
+        }
+        if options.artifact_name.is_some() {
+            conditions.push(format!("A.name = ${}", i));
+            i += 1;
+        }
+        if !options.artifact_ids.is_empty() {
+            conditions.push(format!(
+                "A.id IN (${})",
+                (0..options.artifact_ids.len())
+                    .map(|n| (i + n).to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+            i += options.artifact_ids.len();
+        }
+        if options.uri.is_some() {
+            conditions.push(format!("A.uri = ${}", i));
+            i += 1;
+        }
+        if options.context_id.is_some() {
+            conditions.push(format!("C.context_id = ${}", i));
+        }
+
+        if !conditions.is_empty() {
+            query += &format!("WHERE {}", conditions.join(" AND "));
+        }
+
+        query
     }
 }
 
@@ -438,17 +503,73 @@ pub struct TypeProperty {
 
 #[derive(Debug, Clone, Copy)]
 pub enum TypeKind {
-    Artifact = 0,
-    Execution = 1,
+    Execution = 0,
+    Artifact = 1,
     Context = 2,
 }
 
 impl TypeKind {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Artifact => "artifact",
             Self::Execution => "execution",
+            Self::Artifact => "artifact",
             Self::Context => "context",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum QueryValue<'a> {
+    Int(i32),
+    Str(&'a str),
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct Artifact {
+    pub id: i32,
+    pub type_id: i32,
+    pub name: Option<String>,
+    pub uri: Option<String>,
+    pub state: i32,
+    pub create_time_since_epoch: i64,
+    pub last_update_time_since_epoch: i64,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct ArtifactProperty {
+    pub artifact_id: i32,
+    pub name: String,
+    pub is_custom_property: bool,
+    pub int_value: Option<i32>,
+    pub double_value: Option<f64>,
+    pub string_value: Option<String>,
+}
+
+impl ArtifactProperty {
+    pub fn into_name_and_vaue(self) -> Result<(String, Value), ConvertError> {
+        match self {
+            Self {
+                name,
+                int_value: Some(v),
+                double_value: None,
+                string_value: None,
+                ..
+            } => Ok((name, Value::Int(v))),
+            Self {
+                name,
+                int_value: None,
+                double_value: Some(v),
+                string_value: None,
+                ..
+            } => Ok((name, Value::Double(v))),
+            Self {
+                name,
+                int_value: None,
+                double_value: None,
+                string_value: Some(v),
+                ..
+            } => Ok((name, Value::String(v))),
+            _ => Err(ConvertError::WrongPropertyValue),
         }
     }
 }
