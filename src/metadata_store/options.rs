@@ -2,13 +2,13 @@ use crate::metadata::PropertyType;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Default, Clone)]
-pub struct PutArtifactTypeOptions {
+pub struct PutTypeOptions {
     pub(crate) can_add_fields: bool,
     pub(crate) can_omit_fields: bool,
     pub(crate) properties: BTreeMap<String, PropertyType>,
 }
 
-impl PutArtifactTypeOptions {
+impl PutTypeOptions {
     pub fn can_add_fields(mut self) -> Self {
         self.can_add_fields = true;
         self

@@ -49,6 +49,21 @@ pub struct ArtifactType {
     pub properties: BTreeMap<String, PropertyType>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExecutionType {
+    pub id: Id,
+    pub name: String,
+    pub properties: BTreeMap<String, PropertyType>,
+    // TODO: input_type, output_type
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ContextType {
+    pub id: Id,
+    pub name: String,
+    pub properties: BTreeMap<String, PropertyType>,
+}
+
 // use std::time::{Duration, UNIX_EPOCH};
 
 // #[derive(Debug, Clone, PartialEq)]
@@ -105,41 +120,6 @@ pub struct ArtifactType {
 // impl<'a> From<&'a str> for Value {
 //     fn from(v: &'a str) -> Self {
 //         Self::String(v.to_owned())
-//     }
-// }
-
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct ArtifactTypeId(i32);
-
-// impl ArtifactTypeId {
-//     pub const fn new(id: i32) -> Self {
-//         Self(id)
-//     }
-
-//     pub const fn get(self) -> i32 {
-//         self.0
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct ArtifactType {
-//     pub id: ArtifactTypeId,
-//     pub name: String,
-//     pub properties: BTreeMap<String, PropertyType>,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct NewArtifactType {
-//     pub name: String,
-//     pub properties: BTreeMap<String, PropertyType>,
-// }
-
-// impl NewArtifactType {
-//     pub fn new(name: &str) -> Self {
-//         Self {
-//             name: name.to_owned(),
-//             properties: BTreeMap::new(),
-//         }
 //     }
 // }
 
@@ -209,60 +189,6 @@ pub struct ArtifactType {
 //             properties: BTreeMap::new(),
 //             state: ArtifactState::Unknown,
 //         }
-//     }
-// }
-
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct ExecutionTypeId(i32);
-
-// impl ExecutionTypeId {
-//     pub const fn new(id: i32) -> Self {
-//         Self(id)
-//     }
-
-//     pub const fn get(self) -> i32 {
-//         self.0
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct ExecutionType {
-//     pub id: ExecutionTypeId,
-//     pub name: String,
-//     pub properties: BTreeMap<String, PropertyType>,
-//     pub input_type: Option<ArtifactStructType>,
-//     pub output_type: Option<ArtifactStructType>,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct NewExecutionType {
-//     pub name: String,
-//     pub properties: BTreeMap<String, PropertyType>,
-//     pub input_type: Option<ArtifactStructType>,
-//     pub output_type: Option<ArtifactStructType>,
-// }
-
-// impl NewExecutionType {
-//     pub fn new(name: &str) -> Self {
-//         Self {
-//             name: name.to_owned(),
-//             properties: BTreeMap::new(),
-//             input_type: None,
-//             output_type: None,
-//         }
-//     }
-// }
-
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct ExecutionId(i32);
-
-// impl ExecutionId {
-//     pub const fn new(id: i32) -> Self {
-//         Self(id)
-//     }
-
-//     pub const fn get(self) -> i32 {
-//         self.0
 //     }
 // }
 
@@ -350,43 +276,6 @@ pub struct ArtifactType {
 //                 .unwrap_or_else(|_| Duration::from_secs(0)),
 //         }
 //     }
-// }
-
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-// pub struct ContextTypeId(i32);
-
-// impl ContextTypeId {
-//     pub const fn new(id: i32) -> Self {
-//         Self(id)
-//     }
-
-//     pub const fn get(self) -> i32 {
-//         self.0
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct ContextType {
-//     pub id: ContextTypeId,
-//     pub name: String,
-//     pub properties: BTreeMap<String, PropertyType>,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct NewContextType {
-//     pub name: String,
-//     pub properties: BTreeMap<String, PropertyType>,
-// }
-
-// impl NewContextType {
-//     pub fn new(name: &str) -> Self {
-//         Self {
-//             name: name.to_owned(),
-//             properties: BTreeMap::new(),
-//         }
-//     }
-
-//     // TODO: fn instantiate(&self) -> NewContext
 // }
 
 // #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

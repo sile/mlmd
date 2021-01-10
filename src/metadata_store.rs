@@ -1,7 +1,7 @@
 use self::errors::{GetError, InitError, PutError};
-use self::options::PutArtifactTypeOptions;
-use crate::metadata::{ArtifactType, Id, PropertyType};
-use crate::query::Query;
+use self::options::PutTypeOptions;
+use crate::metadata::{ArtifactType, ContextType, ExecutionType, Id, PropertyType};
+use crate::query::{self, Query, TypeKind};
 use futures::TryStreamExt as _;
 use sqlx::{AnyConnection, Connection as _, Executor as _, Row as _};
 use std::collections::BTreeMap;
@@ -93,41 +93,114 @@ impl MetadataStore {
     pub async fn put_artifact_type(
         &mut self,
         type_name: &str,
-        options: PutArtifactTypeOptions,
+        options: PutTypeOptions,
     ) -> Result<Id, PutError> {
         transaction!(
             self.connection,
-            self.put_artifact_type_without_transaction(type_name, options)
-                .await
+            self.put_type(TypeKind::Artifact, type_name, options).await
         )
     }
 
-    async fn put_artifact_type_without_transaction(
+    pub async fn get_artifact_type(&mut self, type_name: &str) -> Result<ArtifactType, GetError> {
+        let (id, properties) = self.get_type(TypeKind::Artifact, type_name).await?;
+        Ok(ArtifactType {
+            id,
+            name: type_name.to_owned(),
+            properties,
+        })
+    }
+
+    pub async fn get_artifact_types(&mut self) -> Result<Vec<ArtifactType>, GetError> {
+        let types = self
+            .get_types(TypeKind::Artifact, |id, name, properties| ArtifactType {
+                id,
+                name,
+                properties,
+            })
+            .await?;
+        Ok(types)
+    }
+
+    pub async fn put_execution_type(
         &mut self,
         type_name: &str,
-        mut options: PutArtifactTypeOptions,
+        options: PutTypeOptions,
     ) -> Result<Id, PutError> {
-        #[derive(Debug, sqlx::FromRow)]
-        struct Type {
-            id: i32,
-        }
+        transaction!(
+            self.connection,
+            self.put_type(TypeKind::Execution, type_name, options).await
+        )
+    }
 
-        #[derive(Debug, sqlx::FromRow)]
-        struct Property {
-            name: String,
-            data_type: i32,
-        }
+    pub async fn get_execution_type(&mut self, type_name: &str) -> Result<ExecutionType, GetError> {
+        let (id, properties) = self.get_type(TypeKind::Execution, type_name).await?;
+        Ok(ExecutionType {
+            id,
+            name: type_name.to_owned(),
+            properties,
+        })
+    }
 
-        let ty = sqlx::query_as::<_, Type>(self.query.get_artifact_type())
+    pub async fn get_execution_types(&mut self) -> Result<Vec<ExecutionType>, GetError> {
+        let types = self
+            .get_types(TypeKind::Execution, |id, name, properties| ExecutionType {
+                id,
+                name,
+                properties,
+            })
+            .await?;
+        Ok(types)
+    }
+
+    pub async fn put_context_type(
+        &mut self,
+        type_name: &str,
+        options: PutTypeOptions,
+    ) -> Result<Id, PutError> {
+        transaction!(
+            self.connection,
+            self.put_type(TypeKind::Context, type_name, options).await
+        )
+    }
+
+    pub async fn get_context_type(&mut self, type_name: &str) -> Result<ContextType, GetError> {
+        let (id, properties) = self.get_type(TypeKind::Context, type_name).await?;
+        Ok(ContextType {
+            id,
+            name: type_name.to_owned(),
+            properties,
+        })
+    }
+
+    pub async fn get_context_types(&mut self) -> Result<Vec<ContextType>, GetError> {
+        let types = self
+            .get_types(TypeKind::Context, |id, name, properties| ContextType {
+                id,
+                name,
+                properties,
+            })
+            .await?;
+        Ok(types)
+    }
+
+    async fn put_type(
+        &mut self,
+        type_kind: TypeKind,
+        type_name: &str,
+        mut options: PutTypeOptions,
+    ) -> Result<Id, PutError> {
+        let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
+            .bind(type_kind as i32)
             .bind(type_name)
             .fetch_optional(&mut self.connection)
             .await?;
         let ty = if let Some(ty) = ty {
-            let properties =
-                sqlx::query_as::<_, Property>(self.query.get_artifact_type_properties())
-                    .bind(ty.id)
-                    .fetch_all(&mut self.connection)
-                    .await?;
+            let properties = sqlx::query_as::<_, query::TypeProperty>(
+                self.query.get_type_properties_by_type_id(),
+            )
+            .bind(ty.id)
+            .fetch_all(&mut self.connection)
+            .await?;
 
             for property in properties {
                 match options.properties.remove(&property.name) {
@@ -135,7 +208,7 @@ impl MetadataStore {
                     Some(v) if v as i32 == property.data_type => {}
                     _ => {
                         return Err(PutError::TypeAlreadyExists {
-                            kind: "artifact".to_owned(),
+                            kind: type_kind.as_str(),
                             name: type_name.to_owned(),
                         });
                     }
@@ -143,26 +216,28 @@ impl MetadataStore {
             }
             if !options.properties.is_empty() && !options.can_add_fields {
                 return Err(PutError::TypeAlreadyExists {
-                    kind: "artifact".to_owned(),
+                    kind: type_kind.as_str(),
                     name: type_name.to_owned(),
                 });
             }
 
             ty
         } else {
-            sqlx::query(self.query.insert_artifact_type())
+            sqlx::query(self.query.insert_type())
+                .bind(type_kind as i32)
                 .bind(type_name)
                 .execute(&mut self.connection)
                 .await?;
 
-            let ty = sqlx::query_as::<_, Type>(self.query.get_artifact_type())
+            let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
+                .bind(type_kind as i32)
                 .bind(type_name)
                 .fetch_one(&mut self.connection)
                 .await?;
             ty
         };
         for (name, value) in &options.properties {
-            sqlx::query(self.query.insert_artifact_type_property())
+            sqlx::query(self.query.insert_type_property())
                 .bind(ty.id)
                 .bind(name)
                 .bind(*value as i32)
@@ -173,82 +248,57 @@ impl MetadataStore {
         Ok(Id::new(ty.id))
     }
 
-    pub async fn get_artifact_type(&mut self, type_name: &str) -> Result<ArtifactType, GetError> {
-        #[derive(Debug, sqlx::FromRow)]
-        struct Type {
-            id: i32,
+    async fn get_types<F, T>(&mut self, type_kind: TypeKind, f: F) -> Result<Vec<T>, GetError>
+    where
+        F: Fn(Id, String, BTreeMap<String, PropertyType>) -> T,
+    {
+        let mut types = BTreeMap::new();
+        let mut rows = sqlx::query_as::<_, query::Type>(self.query.get_types())
+            .bind(type_kind as i32)
+            .fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            types.insert(row.id, (row.name, BTreeMap::new()));
+        }
+        std::mem::drop(rows);
+
+        let mut rows = sqlx::query_as::<_, query::TypeProperty>(self.query.get_type_properties())
+            .fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            if let Some(ty) = types.get_mut(&row.type_id) {
+                ty.1.insert(row.name, PropertyType::from_i32(row.data_type)?);
+            }
         }
 
-        #[derive(Debug, sqlx::FromRow)]
-        struct Property {
-            name: String,
-            data_type: i32,
-        }
+        Ok(types
+            .into_iter()
+            .map(|(id, (name, properties))| f(Id::new(id), name, properties))
+            .collect())
+    }
 
-        let ty = sqlx::query_as::<_, Type>(self.query.get_artifact_type())
+    async fn get_type(
+        &mut self,
+        type_kind: TypeKind,
+        type_name: &str,
+    ) -> Result<(Id, BTreeMap<String, PropertyType>), GetError> {
+        let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
+            .bind(type_kind as i32)
             .bind(type_name)
             .fetch_optional(&mut self.connection)
             .await?;
         let ty = ty.ok_or_else(|| GetError::NotFound {
             target: format!("artifact type with the name {:?}", type_name),
         })?;
-        let properties = sqlx::query_as::<_, Property>(self.query.get_artifact_type_properties())
-            .bind(ty.id)
-            .fetch_all(&mut self.connection)
-            .await?;
 
-        let mut artifact = ArtifactType {
-            id: Id::new(ty.id),
-            name: type_name.to_owned(),
-            properties: BTreeMap::new(),
-        };
-        for property in properties {
-            artifact
-                .properties
-                .insert(property.name, PropertyType::from_i32(property.data_type)?);
-        }
-        Ok(artifact)
-    }
-
-    pub async fn get_artifact_types(&mut self) -> Result<Vec<ArtifactType>, GetError> {
-        #[derive(Debug, sqlx::FromRow)]
-        struct Type {
-            id: i32,
-            name: String,
-        }
-
-        #[derive(Debug, sqlx::FromRow)]
-        struct Property {
-            type_id: i32,
-            name: String,
-            data_type: i32,
-        }
-
-        let mut types = BTreeMap::new();
+        let mut properties = BTreeMap::new();
         let mut rows =
-            sqlx::query_as::<_, Type>(self.query.get_artifact_types()).fetch(&mut self.connection);
+            sqlx::query_as::<_, query::TypeProperty>(self.query.get_type_properties_by_type_id())
+                .bind(ty.id)
+                .fetch(&mut self.connection);
         while let Some(row) = rows.try_next().await? {
-            types.insert(
-                row.id,
-                ArtifactType {
-                    id: Id::new(row.id),
-                    name: row.name,
-                    properties: BTreeMap::new(),
-                },
-            );
-        }
-        std::mem::drop(rows);
-
-        let mut rows = sqlx::query_as::<_, Property>(self.query.get_type_properties())
-            .fetch(&mut self.connection);
-        while let Some(row) = rows.try_next().await? {
-            if let Some(ty) = types.get_mut(&row.type_id) {
-                ty.properties
-                    .insert(row.name, PropertyType::from_i32(row.data_type)?);
-            }
+            properties.insert(row.name, PropertyType::from_i32(row.data_type)?);
         }
 
-        Ok(types.into_iter().map(|(_, v)| v).collect())
+        Ok((Id::new(ty.id), properties))
     }
 }
 
@@ -273,7 +323,7 @@ mod tests {
         let file = NamedTempFile::new().unwrap();
         let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
-        let options = PutArtifactTypeOptions::default();
+        let options = PutTypeOptions::default();
         store
             .put_artifact_type("t0", options.clone().property_int("p0"))
             .await
@@ -327,7 +377,7 @@ mod tests {
         let file = NamedTempFile::new().unwrap();
         let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
-        let options = PutArtifactTypeOptions::default();
+        let options = PutTypeOptions::default();
         let t0_id = store
             .put_artifact_type("t0", options.clone().property_int("p0"))
             .await
@@ -369,6 +419,207 @@ mod tests {
         let types = store.get_artifact_types().await.unwrap();
         assert_eq!(types.len(), 1);
         assert_eq!(types[0].name, "Trainer");
+    }
+
+    #[async_std::test]
+    async fn put_execution_type_works() {
+        let file = NamedTempFile::new().unwrap();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+        let options = PutTypeOptions::default();
+        store
+            .put_execution_type("t0", options.clone().property_int("p0"))
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            store
+                .put_execution_type("t0", options.clone().property_double("p0"))
+                .await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+
+        assert!(matches!(
+            store
+                .put_execution_type(
+                    "t0",
+                    options.clone().property_int("p0").property_string("p1")
+                )
+                .await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+        store
+            .put_execution_type(
+                "t0",
+                options
+                    .clone()
+                    .can_add_fields()
+                    .property_int("p0")
+                    .property_string("p1"),
+            )
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            store.put_execution_type("t0", options.clone()).await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+        store
+            .put_execution_type("t0", options.clone().can_omit_fields())
+            .await
+            .unwrap();
+
+        store
+            .put_execution_type("t1", options.clone())
+            .await
+            .unwrap();
+    }
+
+    #[async_std::test]
+    async fn get_execution_type_works() {
+        let file = NamedTempFile::new().unwrap();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+        let options = PutTypeOptions::default();
+        let t0_id = store
+            .put_execution_type("t0", options.clone().property_int("p0"))
+            .await
+            .unwrap();
+        let t1_id = store
+            .put_execution_type("t1", options.clone())
+            .await
+            .unwrap();
+        assert_ne!(t0_id, t1_id);
+
+        assert_eq!(
+            store.get_execution_type("t0").await.unwrap(),
+            ExecutionType {
+                id: t0_id,
+                name: "t0".to_owned(),
+                properties: vec![("p0".to_owned(), PropertyType::Int)]
+                    .into_iter()
+                    .collect()
+            }
+        );
+        assert_eq!(
+            store.get_execution_type("t1").await.unwrap(),
+            ExecutionType {
+                id: t1_id,
+                name: "t1".to_owned(),
+                properties: BTreeMap::new(),
+            }
+        );
+        assert!(matches!(
+            store.get_execution_type("t2").await.err(),
+            Some(GetError::NotFound { .. })
+        ));
+    }
+
+    #[async_std::test]
+    async fn get_execution_types_works() {
+        let file = existing_db();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+        let types = store.get_execution_types().await.unwrap();
+        assert_eq!(types.len(), 2);
+        assert_eq!(types[0].name, "DataSet");
+        assert_eq!(types[1].name, "SavedModel");
+    }
+
+    #[async_std::test]
+    async fn put_context_type_works() {
+        let file = NamedTempFile::new().unwrap();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+        let options = PutTypeOptions::default();
+        store
+            .put_context_type("t0", options.clone().property_int("p0"))
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            store
+                .put_context_type("t0", options.clone().property_double("p0"))
+                .await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+
+        assert!(matches!(
+            store
+                .put_context_type(
+                    "t0",
+                    options.clone().property_int("p0").property_string("p1")
+                )
+                .await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+        store
+            .put_context_type(
+                "t0",
+                options
+                    .clone()
+                    .can_add_fields()
+                    .property_int("p0")
+                    .property_string("p1"),
+            )
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            store.put_context_type("t0", options.clone()).await,
+            Err(PutError::TypeAlreadyExists { .. })
+        ));
+        store
+            .put_context_type("t0", options.clone().can_omit_fields())
+            .await
+            .unwrap();
+
+        store.put_context_type("t1", options.clone()).await.unwrap();
+    }
+
+    #[async_std::test]
+    async fn get_context_type_works() {
+        let file = NamedTempFile::new().unwrap();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+        let options = PutTypeOptions::default();
+        let t0_id = store
+            .put_context_type("t0", options.clone().property_int("p0"))
+            .await
+            .unwrap();
+        let t1_id = store.put_context_type("t1", options.clone()).await.unwrap();
+        assert_ne!(t0_id, t1_id);
+
+        assert_eq!(
+            store.get_context_type("t0").await.unwrap(),
+            ContextType {
+                id: t0_id,
+                name: "t0".to_owned(),
+                properties: vec![("p0".to_owned(), PropertyType::Int)]
+                    .into_iter()
+                    .collect()
+            }
+        );
+        assert_eq!(
+            store.get_context_type("t1").await.unwrap(),
+            ContextType {
+                id: t1_id,
+                name: "t1".to_owned(),
+                properties: BTreeMap::new(),
+            }
+        );
+        assert!(matches!(
+            store.get_context_type("t2").await.err(),
+            Some(GetError::NotFound { .. })
+        ));
+    }
+
+    #[async_std::test]
+    async fn get_context_types_works() {
+        let file = existing_db();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+        let types = store.get_context_types().await.unwrap();
+        assert_eq!(types.len(), 1);
+        assert_eq!(types[0].name, "Experiment");
     }
 
     fn sqlite_uri(path: impl AsRef<std::path::Path>) -> String {

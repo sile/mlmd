@@ -36,5 +36,5 @@ pub enum PutError {
     Convert(#[from] ConvertError),
 
     #[error("{kind} type with the name {name} already exists")]
-    TypeAlreadyExists { kind: String, name: String },
+    TypeAlreadyExists { kind: &'static str, name: String },
 }

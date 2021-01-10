@@ -30,27 +30,27 @@ impl Query {
         "INSERT INTO MLMDEnv VALUES ($1)"
     }
 
-    pub fn get_artifact_types(&self) -> &'static str {
-        "SELECT id, name FROM Type WHERE type_kind=0"
+    pub fn get_types(&self) -> &'static str {
+        "SELECT id, name FROM Type WHERE type_kind=$1"
     }
 
     pub fn get_type_properties(&self) -> &'static str {
         "SELECT type_id, name, data_type FROM TypeProperty"
     }
 
-    pub fn get_artifact_type(&self) -> &'static str {
-        "SELECT id FROM Type WHERE name=$1 AND type_kind=0"
+    pub fn get_type_by_name(&self) -> &'static str {
+        "SELECT id, name FROM Type WHERE type_kind=$1 AND name=$2"
     }
 
-    pub fn get_artifact_type_properties(&self) -> &'static str {
-        "SELECT name, data_type FROM TypeProperty WHERE type_id=$1"
+    pub fn get_type_properties_by_type_id(&self) -> &'static str {
+        "SELECT type_id, name, data_type FROM TypeProperty WHERE type_id=$1"
     }
 
-    pub fn insert_artifact_type(&self) -> &'static str {
-        "INSERT INTO Type (name, type_kind) VALUES ($1, 0)"
+    pub fn insert_type(&self) -> &'static str {
+        "INSERT INTO Type (type_kind, name) VALUES ($1, $2)"
     }
 
-    pub fn insert_artifact_type_property(&self) -> &'static str {
+    pub fn insert_type_property(&self) -> &'static str {
         "INSERT INTO TypeProperty (type_id, name, data_type) VALUES ($1, $2, $3)"
     }
 }
@@ -420,5 +420,35 @@ impl MysqlQuery {
                 "             (`last_update_time_since_epoch`); "
             ),
         ]
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct Type {
+    pub id: i32,
+    pub name: String,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct TypeProperty {
+    pub type_id: i32,
+    pub name: String,
+    pub data_type: i32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TypeKind {
+    Artifact = 0,
+    Execution = 1,
+    Context = 2,
+}
+
+impl TypeKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Artifact => "artifact",
+            Self::Execution => "execution",
+            Self::Context => "context",
+        }
     }
 }
