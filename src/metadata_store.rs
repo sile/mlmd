@@ -1,5 +1,6 @@
 use crate::metadata::{ArtifactType, ConvertError, Id, PropertyType};
 use crate::query::Query;
+use futures::TryStreamExt as _;
 use sqlx::{AnyConnection, Connection as _, Executor as _, Row as _};
 use std::collections::BTreeMap;
 
@@ -116,8 +117,6 @@ impl MetadataStore {
         type_name: &str,
         mut options: PutArtifactTypeOptions,
     ) -> Result<Id, PutError> {
-        let this = self;
-
         #[derive(Debug, sqlx::FromRow)]
         struct Type {
             id: i32,
@@ -129,15 +128,15 @@ impl MetadataStore {
             data_type: i32,
         }
 
-        let ty = sqlx::query_as::<_, Type>(this.query.get_artifact_type())
+        let ty = sqlx::query_as::<_, Type>(self.query.get_artifact_type())
             .bind(type_name)
-            .fetch_optional(&mut this.connection)
+            .fetch_optional(&mut self.connection)
             .await?;
         let ty = if let Some(ty) = ty {
             let properties =
-                sqlx::query_as::<_, Property>(this.query.get_artifact_type_properties())
+                sqlx::query_as::<_, Property>(self.query.get_artifact_type_properties())
                     .bind(ty.id)
-                    .fetch_all(&mut this.connection)
+                    .fetch_all(&mut self.connection)
                     .await?;
 
             for property in properties {
@@ -161,23 +160,23 @@ impl MetadataStore {
 
             ty
         } else {
-            sqlx::query(this.query.insert_artifact_type())
+            sqlx::query(self.query.insert_artifact_type())
                 .bind(type_name)
-                .execute(&mut this.connection)
+                .execute(&mut self.connection)
                 .await?;
 
-            let ty = sqlx::query_as::<_, Type>(this.query.get_artifact_type())
+            let ty = sqlx::query_as::<_, Type>(self.query.get_artifact_type())
                 .bind(type_name)
-                .fetch_one(&mut this.connection)
+                .fetch_one(&mut self.connection)
                 .await?;
             ty
         };
         for (name, value) in &options.properties {
-            sqlx::query(this.query.insert_artifact_type_property())
+            sqlx::query(self.query.insert_artifact_type_property())
                 .bind(ty.id)
                 .bind(name)
                 .bind(*value as i32)
-                .execute(&mut this.connection)
+                .execute(&mut self.connection)
                 .await?;
         }
 
@@ -185,44 +184,81 @@ impl MetadataStore {
     }
 
     pub async fn get_artifact_type(&mut self, type_name: &str) -> Result<ArtifactType, GetError> {
-        todo!()
+        #[derive(Debug, sqlx::FromRow)]
+        struct Type {
+            id: i32,
+        }
+
+        #[derive(Debug, sqlx::FromRow)]
+        struct Property {
+            name: String,
+            data_type: i32,
+        }
+
+        let ty = sqlx::query_as::<_, Type>(self.query.get_artifact_type())
+            .bind(type_name)
+            .fetch_optional(&mut self.connection)
+            .await?;
+        let ty = ty.ok_or_else(|| GetError::NotFound {
+            target: format!("artifact type with the name {:?}", type_name),
+        })?;
+        let properties = sqlx::query_as::<_, Property>(self.query.get_artifact_type_properties())
+            .bind(ty.id)
+            .fetch_all(&mut self.connection)
+            .await?;
+
+        let mut artifact = ArtifactType {
+            id: Id::new(ty.id),
+            name: type_name.to_owned(),
+            properties: BTreeMap::new(),
+        };
+        for property in properties {
+            artifact
+                .properties
+                .insert(property.name, PropertyType::from_i32(property.data_type)?);
+        }
+        Ok(artifact)
     }
 
-    pub fn get_artifact_types(&mut self) -> Result<Vec<ArtifactType>, GetError> {
-        // let ids_csv = type_ids
-        //     .map(|x| x.to_string())
-        //     .collect::<Vec<_>>()
-        //     .join(",");
+    pub async fn get_artifact_types(&mut self) -> Result<Vec<ArtifactType>, GetError> {
+        #[derive(Debug, sqlx::FromRow)]
+        struct Type {
+            id: i32,
+            name: String,
+        }
 
-        // let query = format!("SELECT * FROM Type WHERE id IN ({})", ids_csv);
-        // let mut rows = sqlx::query(&query).fetch(&mut self.connection);
-        // let mut types = Vec::new();
-        // while let Some(row) = rows.try_next().await? {
-        //     let ty = TypeRecord::from_row(row)?;
-        //     types.push(ty);
-        // }
-        // std::mem::drop(rows);
+        #[derive(Debug, sqlx::FromRow)]
+        struct Property {
+            type_id: i32,
+            name: String,
+            data_type: i32,
+        }
 
-        // let query = format!("SELECT * FROM TypeProperty WHERE type_id IN ({})", ids_csv);
-        // let mut rows = sqlx::query(&query).fetch(&mut self.connection);
-        // let mut properties: HashMap<_, BTreeMap<_, _>> = HashMap::new();
-        // while let Some(row) = rows.try_next().await? {
-        //     let property = TypePropertyRecord::from_row(row)?;
-        //     properties
-        //         .entry(property.type_id)
-        //         .or_default()
-        //         .insert(property.name, property.data_type);
-        // }
-        // std::mem::drop(rows);
+        let mut types = BTreeMap::new();
+        let mut rows =
+            sqlx::query_as::<_, Type>(self.query.get_artifact_types()).fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            types.insert(
+                row.id,
+                ArtifactType {
+                    id: Id::new(row.id),
+                    name: row.name,
+                    properties: BTreeMap::new(),
+                },
+            );
+        }
+        std::mem::drop(rows);
 
-        // Ok(types
-        //     .into_iter()
-        //     .map(move |ty| {
-        //         let id = ty.id;
-        //         (id, f(ty, properties.remove(&id).unwrap_or_default()))
-        //     })
-        //     .collect())
-        todo!()
+        let mut rows = sqlx::query_as::<_, Property>(self.query.get_type_properties())
+            .fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            if let Some(ty) = types.get_mut(&row.type_id) {
+                ty.properties
+                    .insert(row.name, PropertyType::from_i32(row.data_type)?);
+            }
+        }
+
+        Ok(types.into_iter().map(|(_, v)| v).collect())
     }
 }
 
@@ -230,6 +266,9 @@ impl MetadataStore {
 pub enum GetError {
     #[error("database error")]
     Db(#[from] sqlx::Error),
+
+    #[error("conversion error")]
+    Convert(#[from] ConvertError),
 
     #[error("{target} is not found")]
     NotFound { target: String },
@@ -351,6 +390,55 @@ mod tests {
             .put_artifact_type("t1", options.clone())
             .await
             .unwrap();
+    }
+
+    #[async_std::test]
+    async fn get_artifact_type_works() {
+        let file = NamedTempFile::new().unwrap();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+        let options = PutArtifactTypeOptions::default();
+        let t0_id = store
+            .put_artifact_type("t0", options.clone().property_int("p0"))
+            .await
+            .unwrap();
+        let t1_id = store
+            .put_artifact_type("t1", options.clone())
+            .await
+            .unwrap();
+        assert_ne!(t0_id, t1_id);
+
+        assert_eq!(
+            store.get_artifact_type("t0").await.unwrap(),
+            ArtifactType {
+                id: t0_id,
+                name: "t0".to_owned(),
+                properties: vec![("p0".to_owned(), PropertyType::Int)]
+                    .into_iter()
+                    .collect()
+            }
+        );
+        assert_eq!(
+            store.get_artifact_type("t1").await.unwrap(),
+            ArtifactType {
+                id: t1_id,
+                name: "t1".to_owned(),
+                properties: BTreeMap::new(),
+            }
+        );
+        assert!(matches!(
+            store.get_artifact_type("t2").await.err(),
+            Some(GetError::NotFound { .. })
+        ));
+    }
+
+    #[async_std::test]
+    async fn get_artifact_types_works() {
+        let file = existing_db();
+        let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+        let types = store.get_artifact_types().await.unwrap();
+        assert_eq!(types.len(), 1);
+        assert_eq!(types[0].name, "Trainer");
     }
 
     fn sqlite_uri(path: impl AsRef<std::path::Path>) -> String {

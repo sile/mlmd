@@ -30,6 +30,14 @@ impl Query {
         "INSERT INTO MLMDEnv VALUES ($1)"
     }
 
+    pub fn get_artifact_types(&self) -> &'static str {
+        "SELECT id, name FROM Type WHERE type_kind=0"
+    }
+
+    pub fn get_type_properties(&self) -> &'static str {
+        "SELECT type_id, name, data_type FROM TypeProperty"
+    }
+
     pub fn get_artifact_type(&self) -> &'static str {
         "SELECT id FROM Type WHERE name=$1 AND type_kind=0"
     }

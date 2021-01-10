@@ -42,7 +42,7 @@ pub enum ConvertError {
     UndefinedPropertyType { value: i32 },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArtifactType {
     pub id: Id,
     pub name: String,
