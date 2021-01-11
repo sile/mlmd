@@ -1,3 +1,4 @@
+use sqlx::Row as _;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -34,6 +35,7 @@ impl PropertyType {
     }
 }
 
+// TODO: delete
 #[derive(Debug, thiserror::Error)]
 pub enum ConvertError {
     #[error("artifact state {value} is undefined")]
@@ -153,6 +155,36 @@ pub struct Artifact {
     pub last_update_time_since_epoch: Duration,
 }
 
+impl crate::query::InsertProperty for Artifact {
+    fn insert_property(&mut self, is_custom: bool, name: String, value: Value) {
+        if is_custom {
+            self.custom_properties.insert(name, value);
+        } else {
+            self.properties.insert(name, value);
+        }
+    }
+}
+
+impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Artifact {
+    fn from_row(row: &'a sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: Id::new(row.try_get("id")?),
+            type_id: Id::new(row.try_get("type_id")?),
+            name: row.try_get("name")?,
+            uri: row.try_get("uri")?,
+            properties: BTreeMap::new(),
+            custom_properties: BTreeMap::new(),
+            state: ArtifactState::from_i32(row.try_get("state")?)?,
+            create_time_since_epoch: Duration::from_millis(
+                row.try_get::<i64, _>("create_time_since_epoch")? as u64,
+            ),
+            last_update_time_since_epoch: Duration::from_millis(
+                row.try_get::<i64, _>("last_update_time_since_epoch")? as u64,
+            ),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArtifactState {
     Unknown = 0,
@@ -163,14 +195,16 @@ pub enum ArtifactState {
 }
 
 impl ArtifactState {
-    pub fn from_i32(v: i32) -> Result<Self, ConvertError> {
+    pub fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
         match v {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::Pending),
             2 => Ok(Self::Live),
             3 => Ok(Self::MarkedForDeletion),
             4 => Ok(Self::Deleted),
-            _ => Err(ConvertError::UndefinedArtifactState { value: v }),
+            _ => Err(sqlx::Error::Decode(
+                anyhow::anyhow!("artifact state {} is undefined", v).into(),
+            )),
         }
     }
 }

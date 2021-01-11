@@ -140,7 +140,7 @@ impl Query {
     pub fn get_artifact_properties(&self, n_ids: usize) -> String {
         format!(
             concat!(
-                "SELECT artifact_id, name, is_custom_property, int_value, double_value, string_value ",
+                "SELECT artifact_id as id, name, is_custom_property, int_value, double_value, string_value ",
                 "FROM ArtifactProperty ",
                 "WHERE artifact_id IN ({})"
             ),
@@ -1118,6 +1118,45 @@ impl ContextProperty {
 }
 
 #[derive(Debug, sqlx::FromRow)]
+pub struct Property {
+    pub id: i32,
+    pub name: String,
+    pub is_custom_property: bool,
+    pub int_value: Option<i32>,
+    pub double_value: Option<f64>,
+    pub string_value: Option<String>,
+}
+
+impl Property {
+    pub fn into_name_and_vaue(self) -> Result<(String, Value), ConvertError> {
+        match self {
+            Self {
+                name,
+                int_value: Some(v),
+                double_value: None,
+                string_value: None,
+                ..
+            } => Ok((name, Value::Int(v))),
+            Self {
+                name,
+                int_value: None,
+                double_value: Some(v),
+                string_value: None,
+                ..
+            } => Ok((name, Value::Double(v))),
+            Self {
+                name,
+                int_value: None,
+                double_value: None,
+                string_value: Some(v),
+                ..
+            } => Ok((name, Value::String(v))),
+            _ => Err(ConvertError::WrongPropertyValue),
+        }
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
 pub struct Event {
     pub id: i32,
     #[sqlx(rename = "type")]
@@ -1133,4 +1172,39 @@ pub struct EventPath {
     pub is_index_step: bool,
     pub step_index: Option<i32>,
     pub step_key: Option<String>,
+}
+
+// TODO: move
+pub trait InsertProperty {
+    fn insert_property(&mut self, is_custom: bool, name: String, value: Value);
+}
+
+pub trait GetItemsQueryGenerator {
+    type Item: for<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> + InsertProperty;
+
+    fn generate_select_items_sql(&self) -> String;
+    fn generate_select_properties_sql(&self, items: usize) -> String;
+    fn query_values(&self) -> Vec<QueryValue>;
+}
+
+#[derive(Debug)]
+pub struct GetArtifactsQueryGenerator {
+    pub query: Query,
+    pub options: GetArtifactsOptions,
+}
+
+impl GetItemsQueryGenerator for GetArtifactsQueryGenerator {
+    type Item = metadata::Artifact;
+
+    fn generate_select_items_sql(&self) -> String {
+        self.query.get_artifacts(&self.options)
+    }
+
+    fn generate_select_properties_sql(&self, items: usize) -> String {
+        self.query.get_artifact_properties(items)
+    }
+
+    fn query_values(&self) -> Vec<QueryValue> {
+        self.options.values()
+    }
 }

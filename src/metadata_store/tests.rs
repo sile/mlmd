@@ -1,5 +1,5 @@
 use super::*;
-use crate::metadata::{ArtifactType, ContextType, ExecutionType, Value};
+use crate::metadata::{ArtifactState, ArtifactType, ContextType, ExecutionType, Value};
 use tempfile::NamedTempFile;
 
 #[async_std::test]

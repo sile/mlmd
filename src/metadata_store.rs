@@ -5,12 +5,13 @@ use self::options::{
     PutEventOptions, PutTypeOptions,
 };
 use crate::metadata::{
-    Artifact, ArtifactState, Context, Event, EventStep, EventType, Execution, ExecutionState, Id,
-    PropertyType, Value,
+    Artifact, Context, Event, EventStep, EventType, Execution, ExecutionState, Id, PropertyType,
+    Value,
 };
-use crate::query::{self, Query, TypeKind};
+use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query, TypeKind};
 use crate::requests;
 use futures::TryStreamExt as _;
+use sqlx::FromRow as _;
 use sqlx::{AnyConnection, Connection as _, Row as _};
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -222,6 +223,7 @@ impl MetadataStore {
         Ok(())
     }
 
+    // TODO: delete
     pub async fn get_artifact(&mut self, artifact_id: Id) -> Result<Option<Artifact>, GetError> {
         let artifacts = self
             .get_artifacts(GetArtifactsOptions::default().ids(&[artifact_id]))
@@ -229,13 +231,13 @@ impl MetadataStore {
         Ok(artifacts.into_iter().nth(0))
     }
 
-    pub async fn get_artifacts(
-        &mut self,
-        options: GetArtifactsOptions,
-    ) -> Result<Vec<Artifact>, GetError> {
-        let sql = self.query.get_artifacts(&options);
-        let mut query = sqlx::query_as::<_, query::Artifact>(&sql);
-        for v in options.values() {
+    pub(crate) async fn get_items<T>(&mut self, generator: T) -> Result<Vec<T::Item>, GetError>
+    where
+        T: GetItemsQueryGenerator,
+    {
+        let sql = generator.generate_select_items_sql();
+        let mut query = sqlx::query(&sql);
+        for v in generator.query_values() {
             match v {
                 query::QueryValue::Str(v) => {
                     query = query.bind(v);
@@ -246,48 +248,39 @@ impl MetadataStore {
             }
         }
 
-        let mut artifacts = BTreeMap::new();
+        let mut items = BTreeMap::new();
         let mut rows = query.fetch(&mut self.connection);
         while let Some(row) = rows.try_next().await? {
-            artifacts.insert(
-                row.id,
-                Artifact {
-                    id: Id::new(row.id),
-                    type_id: Id::new(row.type_id),
-                    name: row.name,
-                    uri: row.uri,
-                    properties: BTreeMap::new(),
-                    custom_properties: BTreeMap::new(),
-                    state: ArtifactState::from_i32(row.state)?,
-                    create_time_since_epoch: Duration::from_millis(
-                        row.create_time_since_epoch as u64,
-                    ),
-                    last_update_time_since_epoch: Duration::from_millis(
-                        row.last_update_time_since_epoch as u64,
-                    ),
-                },
-            );
+            let id: i32 = row.try_get("id")?;
+            items.insert(id, T::Item::from_row(&row)?);
         }
         std::mem::drop(rows);
 
-        let sql = self.query.get_artifact_properties(artifacts.len());
-        let mut query = sqlx::query_as::<_, query::ArtifactProperty>(&sql);
-        for id in artifacts.keys() {
+        let sql = generator.generate_select_properties_sql(items.len());
+        let mut query = sqlx::query_as::<_, query::Property>(&sql);
+        for id in items.keys() {
             query = query.bind(*id);
         }
         let mut rows = query.fetch(&mut self.connection);
         while let Some(row) = rows.try_next().await? {
-            let artifact = artifacts.get_mut(&row.artifact_id).expect("bug");
+            let item = items.get_mut(&row.id).expect("bug");
             let is_custom_property = row.is_custom_property;
             let (name, value) = row.into_name_and_vaue()?;
-            if is_custom_property {
-                artifact.custom_properties.insert(name, value);
-            } else {
-                artifact.properties.insert(name, value);
-            }
+            item.insert_property(is_custom_property, name, value);
         }
 
-        Ok(artifacts.into_iter().map(|(_, v)| v).collect())
+        Ok(items.into_iter().map(|(_, v)| v).collect())
+    }
+
+    pub async fn get_artifacts(
+        &mut self,
+        options: GetArtifactsOptions,
+    ) -> Result<Vec<Artifact>, GetError> {
+        let generator = query::GetArtifactsQueryGenerator {
+            query: self.query.clone(),
+            options,
+        };
+        self.get_items(generator).await
     }
 
     pub async fn post_execution(
