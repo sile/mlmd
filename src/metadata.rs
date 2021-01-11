@@ -210,6 +210,17 @@ impl ExecutionState {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Context {
+    pub id: Id,
+    pub type_id: Id,
+    pub name: String,
+    pub properties: BTreeMap<String, Value>,
+    pub custom_properties: BTreeMap<String, Value>,
+    pub create_time_since_epoch: Duration,
+    pub last_update_time_since_epoch: Duration,
+}
+
 // #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 // pub enum EventType {
 //     Unknown = 0,
@@ -251,34 +262,6 @@ impl ExecutionState {
 //             create_time_since_epoch: UNIX_EPOCH
 //                 .elapsed()
 //                 .unwrap_or_else(|_| Duration::from_secs(0)),
-//         }
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct Context {
-//     pub ty: ContextType,
-//     pub id: ContextId,
-//     pub name: String,
-//     pub uri: Option<String>,
-//     pub properties: BTreeMap<String, Value>,
-//     pub create_time_since_epoch: Duration,
-//     pub last_update_time_since_epoch: Duration,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct NewContext {
-//     pub ty: ContextType,
-//     pub name: String,
-//     pub properties: BTreeMap<String, Value>,
-// }
-
-// impl NewContext {
-//     pub fn new(ty: ContextType, name: &str) -> Self {
-//         Self {
-//             ty,
-//             name: name.to_owned(),
-//             properties: BTreeMap::new(),
 //         }
 //     }
 // }

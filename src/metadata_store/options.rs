@@ -292,3 +292,117 @@ impl PostExecutionOptions {
         self
     }
 }
+
+#[derive(Debug, Default, Clone)]
+pub struct GetContextsOptions {
+    pub(crate) type_name: Option<String>,
+    pub(crate) context_name: Option<String>,
+    pub(crate) context_ids: Vec<Id>,
+    pub(crate) artifact_id: Option<Id>,
+    pub(crate) execution_id: Option<Id>,
+}
+
+impl GetContextsOptions {
+    pub fn ty(mut self, type_name: &str) -> Self {
+        self.type_name = Some(type_name.to_owned());
+        self
+    }
+
+    pub fn type_and_name(mut self, type_name: &str, context_name: &str) -> Self {
+        self.type_name = Some(type_name.to_owned());
+        self.context_name = Some(context_name.to_owned());
+        self
+    }
+
+    pub fn ids(mut self, context_ids: &[Id]) -> Self {
+        self.context_ids = Vec::from(context_ids);
+        self
+    }
+
+    pub fn artifact(mut self, artifact_id: Id) -> Self {
+        self.artifact_id = Some(artifact_id);
+        self
+    }
+
+    pub fn execution(mut self, execution_id: Id) -> Self {
+        self.execution_id = Some(execution_id);
+        self
+    }
+
+    pub(crate) fn values(&self) -> Vec<QueryValue> {
+        let mut values = Vec::new();
+        if let Some(v) = &self.type_name {
+            values.push(QueryValue::Str(v));
+        }
+        if let Some(v) = &self.context_name {
+            values.push(QueryValue::Str(v));
+        }
+        for v in &self.context_ids {
+            values.push(QueryValue::Int(v.get()));
+        }
+        if let Some(v) = self.artifact_id {
+            values.push(QueryValue::Int(v.get()));
+        }
+        if let Some(v) = self.execution_id {
+            values.push(QueryValue::Int(v.get()));
+        }
+        values
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PostContextOptions {
+    pub(crate) properties: BTreeMap<String, Value>,
+    pub(crate) custom_properties: BTreeMap<String, Value>,
+    pub(crate) create_time_since_epoch: Duration,
+    pub(crate) last_update_time_since_epoch: Duration,
+}
+
+impl Default for PostContextOptions {
+    fn default() -> Self {
+        Self {
+            properties: BTreeMap::new(),
+            custom_properties: BTreeMap::new(),
+            create_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
+            last_update_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
+        }
+    }
+}
+
+impl PostContextOptions {
+    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.properties = properties;
+        self
+    }
+
+    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.custom_properties = properties;
+        self
+    }
+
+    pub fn property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.custom_properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
+        self.create_time_since_epoch = time;
+        self
+    }
+
+    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
+        self.last_update_time_since_epoch = time;
+        self
+    }
+}

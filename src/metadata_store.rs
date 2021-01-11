@@ -1,11 +1,11 @@
 use self::errors::{GetError, InitError, PostError, PutError};
 use self::options::{
-    GetArtifactsOptions, GetExecutionsOptions, PostArtifactOptions, PostExecutionOptions,
-    PutTypeOptions,
+    GetArtifactsOptions, GetContextsOptions, GetExecutionsOptions, PostArtifactOptions,
+    PostContextOptions, PostExecutionOptions, PutTypeOptions,
 };
 use crate::metadata::{
-    Artifact, ArtifactState, ArtifactType, ContextType, Execution, ExecutionState, ExecutionType,
-    Id, PropertyType, Value,
+    Artifact, ArtifactState, ArtifactType, Context, ContextType, Execution, ExecutionState,
+    ExecutionType, Id, PropertyType, Value,
 };
 use crate::query::{self, Query, TypeKind};
 use futures::TryStreamExt as _;
@@ -562,6 +562,208 @@ impl MetadataStore {
         }
 
         Ok(executions.into_iter().map(|(_, v)| v).collect())
+    }
+
+    pub async fn post_context(
+        &mut self,
+        type_id: Id,
+        context_name: &str,
+        options: PostContextOptions,
+    ) -> Result<Id, PostError> {
+        // TODO: optimize
+        let context_type = self
+            .get_context_types()
+            .await?
+            .into_iter()
+            .find(|a| a.id == type_id)
+            .ok_or_else(|| PostError::TypeNotFound)?;
+        for (name, value) in &options.properties {
+            if context_type.properties.get(name).copied() != Some(value.ty()) {
+                return Err(PostError::UndefinedProperty);
+            }
+        }
+
+        let mut connection = self.connection.begin().await?;
+
+        let count: i32 = sqlx::query_scalar(self.query.check_context_name())
+            .bind(type_id.get())
+            .bind(context_name)
+            .bind(-1) // dummy context id (TODO)
+            .fetch_one(&mut connection)
+            .await?;
+        if count > 0 {
+            return Err(PostError::NameConflict);
+        }
+
+        let sql = self.query.insert_context();
+        sqlx::query(&sql)
+            .bind(type_id.get())
+            .bind(options.create_time_since_epoch.as_millis() as i64)
+            .bind(options.last_update_time_since_epoch.as_millis() as i64)
+            .bind(context_name)
+            .execute(&mut connection)
+            .await?;
+
+        let context_id: i32 = sqlx::query_scalar(self.query.get_last_context_id())
+            .fetch_one(&mut connection)
+            .await?;
+
+        for (name, value, is_custom) in options
+            .properties
+            .iter()
+            .map(|(k, v)| (k, v, false))
+            .chain(options.custom_properties.iter().map(|(k, v)| (k, v, true)))
+        {
+            let sql = self.query.upsert_context_property(value);
+            let mut query = sqlx::query(&sql)
+                .bind(context_id)
+                .bind(name)
+                .bind(is_custom);
+            query = match value {
+                Value::Int(v) => query.bind(*v),
+                Value::Double(v) => query.bind(*v),
+                Value::String(v) => query.bind(v),
+            };
+            query.execute(&mut connection).await?;
+        }
+
+        connection.commit().await?;
+        Ok(Id::new(context_id))
+    }
+
+    // TODO: remove redundant code
+    pub async fn put_context(&mut self, context: &Context) -> Result<(), PutError> {
+        // TODO: optimize
+        let context_type = self
+            .get_context_types()
+            .await?
+            .into_iter()
+            .find(|a| a.id == context.type_id)
+            .ok_or_else(|| PutError::TypeNotFound)?;
+        for (name, value) in &context.properties {
+            if context_type.properties.get(name).copied() != Some(value.ty()) {
+                return Err(PutError::UndefinedProperty);
+            }
+        }
+
+        // TODO: check if type id is unchanged
+        let old = self
+            .get_context(context.id)
+            .await?
+            .ok_or_else(|| PutError::NotFound)?;
+        if old.type_id != context.type_id {
+            return Err(PutError::WrongTypeId);
+        }
+
+        let mut connection = self.connection.begin().await?;
+
+        let count: i32 = sqlx::query_scalar(self.query.check_context_name())
+            .bind(context.type_id.get())
+            .bind(&context.name)
+            .bind(context.id.get())
+            .fetch_one(&mut connection)
+            .await?;
+        if count > 0 {
+            return Err(PutError::NameConflict);
+        }
+
+        let sql = self.query.update_context();
+        sqlx::query(&sql)
+            .bind(context.create_time_since_epoch.as_millis() as i64)
+            .bind(context.last_update_time_since_epoch.as_millis() as i64)
+            .bind(&context.name)
+            .bind(context.id.get())
+            .execute(&mut connection)
+            .await?;
+
+        for (name, value, is_custom) in context
+            .properties
+            .iter()
+            .map(|(k, v)| (k, v, false))
+            .chain(context.custom_properties.iter().map(|(k, v)| (k, v, true)))
+        {
+            let sql = self.query.upsert_context_property(value);
+            dbg!(&sql);
+            let mut query = sqlx::query(&sql)
+                .bind(context.id.get())
+                .bind(name)
+                .bind(is_custom);
+            query = match value {
+                Value::Int(v) => query.bind(*v),
+                Value::Double(v) => query.bind(*v),
+                Value::String(v) => query.bind(v),
+            };
+            query.execute(&mut connection).await?;
+        }
+
+        connection.commit().await?;
+        Ok(())
+    }
+
+    pub async fn get_context(&mut self, context_id: Id) -> Result<Option<Context>, GetError> {
+        let contexts = self
+            .get_contexts(GetContextsOptions::default().ids(&[context_id]))
+            .await?;
+        Ok(contexts.into_iter().nth(0))
+    }
+
+    pub async fn get_contexts(
+        &mut self,
+        options: GetContextsOptions,
+    ) -> Result<Vec<Context>, GetError> {
+        let sql = self.query.get_contexts(&options);
+        let mut query = sqlx::query_as::<_, query::Context>(&sql);
+        for v in options.values() {
+            match v {
+                query::QueryValue::Str(v) => {
+                    query = query.bind(v);
+                }
+                query::QueryValue::Int(v) => {
+                    query = query.bind(v);
+                }
+            }
+        }
+
+        let mut contexts = BTreeMap::new();
+        let mut rows = query.fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            contexts.insert(
+                row.id,
+                Context {
+                    id: Id::new(row.id),
+                    type_id: Id::new(row.type_id),
+                    name: row.name,
+                    properties: BTreeMap::new(),
+                    custom_properties: BTreeMap::new(),
+                    create_time_since_epoch: Duration::from_millis(
+                        row.create_time_since_epoch as u64,
+                    ),
+                    last_update_time_since_epoch: Duration::from_millis(
+                        row.last_update_time_since_epoch as u64,
+                    ),
+                },
+            );
+        }
+        std::mem::drop(rows);
+
+        let sql = self.query.get_context_properties(contexts.len());
+        let mut query = sqlx::query_as::<_, query::ContextProperty>(&sql);
+        for id in contexts.keys() {
+            query = query.bind(*id);
+        }
+        let mut rows = query.fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            let context = contexts.get_mut(&row.context_id).expect("bug");
+            let is_custom_property = row.is_custom_property;
+            let (name, value) = row.into_name_and_vaue()?;
+            if is_custom_property {
+                context.custom_properties.insert(name, value);
+            } else {
+                context.properties.insert(name, value);
+            }
+        }
+
+        Ok(contexts.into_iter().map(|(_, v)| v).collect())
     }
 
     async fn initialize_database(&mut self) -> Result<(), InitError> {

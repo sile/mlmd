@@ -440,6 +440,103 @@ async fn get_execution_types_works() {
 }
 
 #[async_std::test]
+async fn get_contexts_works() -> anyhow::Result<()> {
+    let file = existing_db();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+
+    let options = GetContextsOptions::default();
+
+    // All.
+    let contexts = store.get_contexts(options.clone()).await?;
+    assert_eq!(contexts, vec![context0()]);
+
+    // By type name.
+    let contexts = store
+        .get_contexts(options.clone().ty("Experiment"))
+        .await
+        .unwrap();
+    assert_eq!(contexts, vec![context0()]);
+
+    let contexts = store.get_contexts(options.clone().ty("foo")).await.unwrap();
+    assert_eq!(contexts, vec![]);
+
+    let contexts = store
+        .get_contexts(options.clone().type_and_name("Experiment", "exp.27823"))
+        .await
+        .unwrap();
+    assert_eq!(contexts, vec![context0()]);
+
+    // By ID.
+    let unregistered_id = Id::new(100);
+    let contexts = store
+        .get_contexts(options.clone().ids(&[Id::new(1), unregistered_id]))
+        .await
+        .unwrap();
+    assert_eq!(contexts, vec![context0()]);
+
+    // By artifact.
+    let contexts = store
+        .get_contexts(options.clone().artifact(Id::new(2)))
+        .await
+        .unwrap();
+    assert_eq!(contexts, vec![context0()]);
+
+    // By execution.
+    let contexts = store
+        .get_contexts(options.clone().execution(Id::new(1)))
+        .await
+        .unwrap();
+    assert_eq!(contexts, vec![context0()]);
+
+    Ok(())
+}
+
+#[async_std::test]
+async fn put_context_works() -> anyhow::Result<()> {
+    let file = existing_db();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    assert_eq!(store.get_contexts(default()).await?.len(), 1);
+
+    let mut context = context0();
+    context.name = "foo".to_string();
+    context
+        .custom_properties
+        .insert("bar".to_string(), Value::Int(10));
+    store.put_context(&context).await?;
+
+    assert_eq!(store.get_contexts(default()).await?.len(), 1);
+    assert_eq!(store.get_context(context.id).await?, Some(context));
+
+    Ok(())
+}
+
+#[async_std::test]
+async fn post_context_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new().unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+
+    assert!(store.get_contexts(default()).await?.is_empty());
+
+    let type_id = store.put_context_type("Context", default()).await?;
+
+    // Simple context.
+    let context_id = store.post_context(type_id, "bar", default()).await?;
+
+    let contexts = store.get_contexts(default()).await?;
+    assert_eq!(contexts.len(), 1);
+    assert_eq!(contexts[0].id, context_id);
+
+    // Name confilict.
+    store.post_context(type_id, "foo", default()).await?;
+    assert!(matches!(
+        store.post_context(type_id, "foo", default()).await.err(),
+        Some(PostError::NameConflict)
+    ));
+
+    Ok(())
+}
+
+#[async_std::test]
 async fn put_context_type_works() {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
@@ -608,5 +705,22 @@ fn execution0() -> Execution {
         custom_properties: BTreeMap::new(),
         create_time_since_epoch: Duration::from_millis(1609134222505),
         last_update_time_since_epoch: Duration::from_millis(1609134224027),
+    }
+}
+
+fn context0() -> Context {
+    Context {
+        id: Id::new(1),
+        type_id: Id::new(4),
+        name: "exp.27823".to_owned(),
+        properties: vec![(
+            "note".to_owned(),
+            Value::String("My first experiment.".to_owned()),
+        )]
+        .into_iter()
+        .collect(),
+        custom_properties: BTreeMap::new(),
+        create_time_since_epoch: Duration::from_millis(1609134224698),
+        last_update_time_since_epoch: Duration::from_millis(1609134224922),
     }
 }
