@@ -1,8 +1,8 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, ConvertError, Value};
+use crate::metadata::{self, ConvertError, EventStep, Value};
 use crate::metadata_store::options::{
-    GetArtifactsOptions, GetContextsOptions, GetExecutionsOptions, PostArtifactOptions,
-    PostExecutionOptions,
+    GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
+    PostArtifactOptions, PostExecutionOptions,
 };
 
 #[derive(Debug, Clone)]
@@ -370,6 +370,70 @@ impl Query {
 
     pub fn check_context_name(&self) -> &'static str {
         "SELECT count(*) FROM Context WHERE type_id=? AND name=? AND id != ?"
+    }
+
+    pub fn insert_event(&self) -> &'static str {
+        "INSERT INTO Event (artifact_id, execution_id, type, milliseconds_since_epoch) VALUES (?, ?, ?, ?)"
+    }
+
+    pub fn get_last_event_id(&self) -> &'static str {
+        "SELECT id FROM Event ORDER BY id DESC LIMIT 1"
+    }
+
+    pub fn insert_event_path(&self, step: &EventStep) -> &'static str {
+        match step {
+            EventStep::Index(_) => {
+                "INSERT INTO EventPath (event_id, is_index_step, step_index) VALUES (?, 1, ?)"
+            }
+            EventStep::Key(_) => {
+                "INSERT INTO EventPath (event_id, is_index_step, step_key) VALUES (?, 0, ?)"
+            }
+        }
+    }
+
+    pub fn get_events(&self, options: &GetEventsOptions) -> String {
+        let mut query =
+            "SELECT Event.id, artifact_id, execution_id, Event.type, milliseconds_since_epoch FROM Event "
+            .to_owned();
+        if !options.artifact_ids.is_empty() {
+            query += "JOIN Artifact ON Event.artifact_id = Artifact.id ";
+        }
+        if !options.execution_ids.is_empty() {
+            query += "JOIN Execution ON Event.execution_id = Execution.id ";
+        }
+
+        let mut conditions = Vec::new();
+        if !options.artifact_ids.is_empty() {
+            conditions.push(format!(
+                "Artifact.id IN ({}) ",
+                options
+                    .artifact_ids
+                    .iter()
+                    .map(|_| "?")
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+        }
+        if !options.execution_ids.is_empty() {
+            conditions.push(format!(
+                "Execution.id IN ({}) ",
+                options
+                    .execution_ids
+                    .iter()
+                    .map(|_| "?")
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+        }
+        if !conditions.is_empty() {
+            query += &format!("WHERE {}", conditions.join(" AND "));
+        }
+        query
+    }
+
+    pub fn get_event_paths(&self, n_events: usize) -> String {
+        format!("SELECT event_id, is_index_step, step_index, step_key FROM EventPath WHERE event_id IN ({})",
+                (0..n_events).map(|_| "?").collect::<Vec<_>>().join(","))
     }
 }
 
@@ -1036,4 +1100,22 @@ impl ContextProperty {
             _ => Err(ConvertError::WrongPropertyValue),
         }
     }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct Event {
+    pub id: i32,
+    #[sqlx(rename = "type")]
+    pub ty: i32,
+    pub artifact_id: i32,
+    pub execution_id: i32,
+    pub milliseconds_since_epoch: i64,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct EventPath {
+    pub event_id: i32,
+    pub is_index_step: bool,
+    pub step_index: Option<i32>,
+    pub step_key: Option<String>,
 }

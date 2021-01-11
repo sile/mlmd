@@ -662,6 +662,114 @@ async fn put_attribution_works() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[async_std::test]
+async fn put_association_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new().unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+    let t0 = store.put_execution_type("t0", default()).await?;
+    let e0 = store.post_execution(t0, default()).await?;
+    let _e1 = store.post_execution(t0, default()).await?;
+
+    let t1 = store.put_context_type("t1", default()).await?;
+    let _c0 = store.post_context(t1, "foo", default()).await?;
+    let c1 = store.post_context(t1, "bar", default()).await?;
+
+    store.put_association(c1, e0).await?;
+    let contexts = store
+        .get_contexts(GetContextsOptions::default().execution(e0))
+        .await?;
+    assert_eq!(contexts.len(), 1);
+    assert_eq!(contexts[0].id, c1);
+
+    let executions = store
+        .get_executions(GetExecutionsOptions::default().context(c1))
+        .await?;
+    assert_eq!(executions.len(), 1);
+    assert_eq!(executions[0].id, e0);
+
+    Ok(())
+}
+
+#[async_std::test]
+async fn put_event_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new().unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+    let t0 = store.put_execution_type("t0", default()).await?;
+    let e0 = store.post_execution(t0, default()).await?;
+    let e1 = store.post_execution(t0, default()).await?;
+
+    let t1 = store.put_artifact_type("t1", default()).await?;
+    let a0 = store.post_artifact(t1, default()).await?;
+    let a1 = store.post_artifact(t1, default()).await?;
+
+    store.put_event(EventType::Input, a0, e0, default()).await?;
+    store
+        .put_event(
+            EventType::Output,
+            a1,
+            e1,
+            PutEventOptions::default().step(EventStep::Index(30)),
+        )
+        .await?;
+
+    let events = store.get_events(default()).await?;
+    assert_eq!(events.len(), 2);
+
+    assert_eq!(events[0].artifact_id, a0);
+    assert_eq!(events[0].execution_id, e0);
+    assert_eq!(events[0].ty, EventType::Input);
+    assert_eq!(events[0].path, vec![]);
+
+    assert_eq!(events[1].artifact_id, a1);
+    assert_eq!(events[1].execution_id, e1);
+    assert_eq!(events[1].ty, EventType::Output);
+    assert_eq!(events[1].path, vec![EventStep::Index(30)]);
+
+    Ok(())
+}
+
+#[async_std::test]
+async fn get_events_works() -> anyhow::Result<()> {
+    let file = existing_db();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+
+    let events = store.get_events(default()).await?;
+    assert_eq!(events, vec![event0(), event1()]);
+
+    let events = store
+        .get_events(GetEventsOptions::default().artifact_ids(&[Id::new(1)]))
+        .await?;
+    assert_eq!(events, vec![event0()]);
+
+    let events = store
+        .get_events(GetEventsOptions::default().artifact_ids(&[Id::new(2)]))
+        .await?;
+    assert_eq!(events, vec![event1()]);
+
+    let events = store
+        .get_events(GetEventsOptions::default().execution_ids(&[Id::new(1)]))
+        .await?;
+    assert_eq!(events, vec![event0(), event1()]);
+
+    let events = store
+        .get_events(GetEventsOptions::default().execution_ids(&[Id::new(2)]))
+        .await?;
+    assert_eq!(events, vec![]);
+
+    let events = store
+        .get_events(
+            GetEventsOptions::default()
+                .artifact_ids(&[Id::new(1)])
+                .execution_ids(&[Id::new(1)]),
+        )
+        .await?;
+    assert_eq!(events, vec![event0()]);
+
+    Ok(())
+}
+
 fn sqlite_uri(path: impl AsRef<std::path::Path>) -> String {
     format!(
         "sqlite://{}",
@@ -751,5 +859,25 @@ fn context0() -> Context {
         custom_properties: BTreeMap::new(),
         create_time_since_epoch: Duration::from_millis(1609134224698),
         last_update_time_since_epoch: Duration::from_millis(1609134224922),
+    }
+}
+
+fn event0() -> Event {
+    Event {
+        artifact_id: Id::new(1),
+        execution_id: Id::new(1),
+        path: Vec::new(),
+        ty: EventType::DeclaredInput,
+        create_time_since_epoch: Duration::from_millis(1609134223004),
+    }
+}
+
+fn event1() -> Event {
+    Event {
+        artifact_id: Id::new(2),
+        execution_id: Id::new(1),
+        path: Vec::new(),
+        ty: EventType::DeclaredOutput,
+        create_time_since_epoch: Duration::from_millis(1609134223788),
     }
 }

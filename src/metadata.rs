@@ -45,6 +45,9 @@ pub enum ConvertError {
     #[error("property type {value} is undefined")]
     UndefinedPropertyType { value: i32 },
 
+    #[error("event type {value} is undefined")]
+    UndefinedEventType { value: i32 },
+
     #[error("wrong property value")]
     WrongPropertyValue,
 }
@@ -221,65 +224,43 @@ pub struct Context {
     pub last_update_time_since_epoch: Duration,
 }
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-// pub enum EventType {
-//     Unknown = 0,
-//     DeclaredOutput = 1,
-//     DeclaredInput = 2,
-//     Input = 3,
-//     Output = 4,
-//     InternalInput = 5,
-//     InternalOutput = 6,
-// }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EventType {
+    Unknown = 0,
+    DeclaredOutput = 1,
+    DeclaredInput = 2,
+    Input = 3,
+    Output = 4,
+    InternalInput = 5,
+    InternalOutput = 6,
+}
 
-// #[derive(Debug, Clone)]
-// pub enum EventStep {
-//     Index(i64),
-//     Key(String),
-// }
+impl EventType {
+    pub fn from_i32(v: i32) -> Result<Self, ConvertError> {
+        match v {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::DeclaredOutput),
+            2 => Ok(Self::DeclaredInput),
+            3 => Ok(Self::Input),
+            4 => Ok(Self::Output),
+            5 => Ok(Self::InternalInput),
+            6 => Ok(Self::InternalOutput),
+            _ => Err(ConvertError::UndefinedEventType { value: v }),
+        }
+    }
+}
 
-// #[derive(Debug, Clone)]
-// pub struct EventPath {
-//     pub steps: Vec<EventStep>,
-// }
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EventStep {
+    Index(i32),
+    Key(String),
+}
 
-// #[derive(Debug, Clone)]
-// pub struct Event {
-//     pub artifact_id: ArtifactId,
-//     pub execution_id: ExecutionId,
-//     pub path: Option<EventPath>,
-//     pub ty: EventType,
-//     pub create_time_since_epoch: Duration,
-// }
-
-// impl Event {
-//     pub fn new(ty: EventType, artifact_id: ArtifactId, execution_id: ExecutionId) -> Self {
-//         Self {
-//             ty,
-//             artifact_id,
-//             execution_id,
-//             path: None,
-//             create_time_since_epoch: UNIX_EPOCH
-//                 .elapsed()
-//                 .unwrap_or_else(|_| Duration::from_secs(0)),
-//         }
-//     }
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct ParentContext {
-//     pub child_id: ContextId,
-//     pub parent_id: ContextId,
-// }
-
-// #[derive(Debug, Clone)]
-// pub enum ArtifactStructType {
-//     Simple(ArtifactType),
-//     Union(Vec<Self>),
-//     Intersection(Vec<Self>),
-//     List(Box<Self>),
-//     None,
-//     Any,
-//     Tuple(Vec<Self>),
-//     Dict(BTreeMap<String, Self>),
-// }
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Event {
+    pub artifact_id: Id,
+    pub execution_id: Id,
+    pub path: Vec<EventStep>,
+    pub ty: EventType,
+    pub create_time_since_epoch: Duration,
+}

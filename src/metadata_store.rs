@@ -1,11 +1,11 @@
 use self::errors::{GetError, InitError, PostError, PutError};
 use self::options::{
-    GetArtifactsOptions, GetContextsOptions, GetExecutionsOptions, PostArtifactOptions,
-    PostContextOptions, PostExecutionOptions, PutTypeOptions,
+    GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
+    PostArtifactOptions, PostContextOptions, PostExecutionOptions, PutEventOptions, PutTypeOptions,
 };
 use crate::metadata::{
-    Artifact, ArtifactState, ArtifactType, Context, ContextType, Execution, ExecutionState,
-    ExecutionType, Id, PropertyType, Value,
+    Artifact, ArtifactState, ArtifactType, Context, ContextType, Event, EventStep, EventType,
+    Execution, ExecutionState, ExecutionType, Id, PropertyType, Value,
 };
 use crate::query::{self, Query, TypeKind};
 use futures::TryStreamExt as _;
@@ -771,6 +771,7 @@ impl MetadataStore {
         context_id: Id,
         artifact_id: Id,
     ) -> Result<(), PutError> {
+        // TODO: check whether context and artifact exist
         sqlx::query(self.query.insert_attribution())
             .bind(context_id.get())
             .bind(artifact_id.get())
@@ -784,12 +785,94 @@ impl MetadataStore {
         context_id: Id,
         execution_id: Id,
     ) -> Result<(), PutError> {
+        // TODO: check whether context and execution exist
         sqlx::query(self.query.insert_association())
             .bind(context_id.get())
             .bind(execution_id.get())
             .execute(&mut self.connection)
             .await?;
         Ok(())
+    }
+
+    pub async fn put_event(
+        &mut self,
+        event_type: EventType,
+        artifact_id: Id,
+        execution_id: Id,
+        options: PutEventOptions,
+    ) -> Result<(), PutError> {
+        // TODO: check whether artifact and execution exist
+        let mut connection = self.connection.begin().await?;
+
+        sqlx::query(self.query.insert_event())
+            .bind(artifact_id.get())
+            .bind(execution_id.get())
+            .bind(event_type as i32)
+            .bind(options.create_time_since_epoch.as_millis() as i64)
+            .execute(&mut connection)
+            .await?;
+        let event_id: i32 = sqlx::query_scalar(self.query.get_last_event_id())
+            .fetch_one(&mut connection)
+            .await?;
+
+        for step in &options.path {
+            let sql = self.query.insert_event_path(step);
+            let query = match step {
+                EventStep::Index(v) => sqlx::query(&sql).bind(event_id).bind(*v),
+                EventStep::Key(v) => sqlx::query(&sql).bind(event_id).bind(v),
+            };
+            query.execute(&mut connection).await?;
+        }
+
+        connection.commit().await?;
+        Ok(())
+    }
+
+    pub async fn get_events(&mut self, options: GetEventsOptions) -> Result<Vec<Event>, GetError> {
+        let sql = self.query.get_events(&options);
+        let mut query = sqlx::query_as::<_, query::Event>(&sql);
+        for id in &options.artifact_ids {
+            query = query.bind(id.get());
+        }
+        for id in &options.execution_ids {
+            query = query.bind(id.get());
+        }
+
+        let mut events = BTreeMap::new();
+        let mut rows = query.fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            events.insert(
+                row.id,
+                Event {
+                    artifact_id: Id::new(row.artifact_id),
+                    execution_id: Id::new(row.execution_id),
+                    path: Vec::new(),
+                    ty: EventType::from_i32(row.ty)?,
+                    create_time_since_epoch: Duration::from_millis(
+                        row.milliseconds_since_epoch as u64,
+                    ),
+                },
+            );
+        }
+        std::mem::drop(rows);
+
+        let sql = self.query.get_event_paths(events.len());
+        let mut query = sqlx::query_as::<_, query::EventPath>(&sql);
+        for id in events.keys().cloned() {
+            query = query.bind(id);
+        }
+
+        let mut rows = query.fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            let event = events.get_mut(&row.event_id).expect("bug");
+            event.path.push(if row.is_index_step {
+                EventStep::Index(row.step_index.expect("TODO"))
+            } else {
+                EventStep::Key(row.step_key.expect("TODO"))
+            });
+        }
+
+        Ok(events.into_iter().map(|(_, v)| v).collect())
     }
 
     async fn initialize_database(&mut self) -> Result<(), InitError> {

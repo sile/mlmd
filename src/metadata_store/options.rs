@@ -1,4 +1,4 @@
-use crate::metadata::{ArtifactState, ExecutionState, Id, PropertyType, Value};
+use crate::metadata::{ArtifactState, EventStep, ExecutionState, Id, PropertyType, Value};
 use crate::query::QueryValue;
 use std::collections::BTreeMap;
 use std::time::{Duration, UNIX_EPOCH};
@@ -403,6 +403,56 @@ impl PostContextOptions {
 
     pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
         self.last_update_time_since_epoch = time;
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PutEventOptions {
+    pub(crate) path: Vec<EventStep>,
+    pub(crate) create_time_since_epoch: Duration,
+}
+
+impl Default for PutEventOptions {
+    fn default() -> Self {
+        Self {
+            path: Vec::new(),
+            create_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
+        }
+    }
+}
+
+impl PutEventOptions {
+    pub fn path(mut self, path: Vec<EventStep>) -> Self {
+        self.path = path;
+        self
+    }
+
+    pub fn step(mut self, step: EventStep) -> Self {
+        self.path.push(step);
+        self
+    }
+
+    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
+        self.create_time_since_epoch = time;
+        self
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct GetEventsOptions {
+    pub(crate) artifact_ids: Vec<Id>,
+    pub(crate) execution_ids: Vec<Id>,
+}
+
+impl GetEventsOptions {
+    pub fn artifact_ids(mut self, ids: &[Id]) -> Self {
+        self.artifact_ids = Vec::from(ids);
+        self
+    }
+
+    pub fn execution_ids(mut self, ids: &[Id]) -> Self {
+        self.execution_ids = Vec::from(ids);
         self
     }
 }
