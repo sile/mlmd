@@ -46,4 +46,16 @@ pub enum PostError {
 
     #[error("conversion error")]
     Convert(#[from] ConvertError),
+
+    #[error("type not found")]
+    TypeNotFound,
+
+    #[error("undefined property")]
+    UndefinedProperty,
+
+    #[error("name already exists")]
+    NameConflict,
+
+    #[error(transparent)]
+    Get(#[from] GetError),
 }

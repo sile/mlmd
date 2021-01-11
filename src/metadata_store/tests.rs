@@ -160,6 +160,60 @@ async fn get_artifacts_works() {
 }
 
 #[async_std::test]
+async fn post_artifact_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new().unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+
+    assert!(store.get_artifacts(default()).await?.is_empty());
+
+    let type_id = store
+        .put_artifact_type(
+            "DataSet",
+            PutTypeOptions::default()
+                .property_int("day")
+                .property_string("split"),
+        )
+        .await?;
+
+    // Simple artifact.
+    let artifact_id = store.post_artifact(type_id, default()).await?;
+
+    let artifacts = store.get_artifacts(default()).await?;
+    assert_eq!(artifacts.len(), 1);
+    assert_eq!(artifacts[0].id, artifact_id);
+
+    // Complex artifact.
+    let mut expected = artifact0();
+    expected.id = store
+        .post_artifact(
+            type_id,
+            PostArtifactOptions::default()
+                .uri(expected.uri.as_ref().unwrap())
+                .properties(expected.properties.clone())
+                .create_time_since_epoch(expected.create_time_since_epoch)
+                .last_update_time_since_epoch(expected.last_update_time_since_epoch),
+        )
+        .await?;
+    let artifacts = store.get_artifacts(default()).await?;
+    assert_eq!(artifacts.len(), 2);
+    assert_eq!(artifacts[1], expected);
+
+    // Name confilict.
+    store
+        .post_artifact(type_id, PostArtifactOptions::default().name("foo"))
+        .await?;
+    assert!(matches!(
+        store
+            .post_artifact(type_id, PostArtifactOptions::default().name("foo"))
+            .await
+            .err(),
+        Some(PostError::NameConflict)
+    ));
+
+    Ok(())
+}
+
+#[async_std::test]
 async fn put_execution_type_works() {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
@@ -415,4 +469,8 @@ fn artifact1() -> Artifact {
         create_time_since_epoch: Duration::from_millis(1609134223250),
         last_update_time_since_epoch: Duration::from_millis(1609134223518),
     }
+}
+
+fn default<T: Default>() -> T {
+    T::default()
 }

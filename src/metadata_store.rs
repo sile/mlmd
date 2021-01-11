@@ -1,11 +1,11 @@
 use self::errors::{GetError, InitError, PostError, PutError};
 use self::options::{GetArtifactsOptions, PostArtifactOptions, PutTypeOptions};
 use crate::metadata::{
-    Artifact, ArtifactState, ArtifactType, ContextType, ExecutionType, Id, PropertyType,
+    Artifact, ArtifactState, ArtifactType, ContextType, ExecutionType, Id, PropertyType, Value,
 };
 use crate::query::{self, Query, TypeKind};
 use futures::TryStreamExt as _;
-use sqlx::{AnyConnection, Connection as _, Executor as _, Row as _};
+use sqlx::{AnyConnection, Connection as _, Row as _};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -13,19 +13,6 @@ mod errors;
 pub mod options;
 #[cfg(test)]
 mod tests;
-
-macro_rules! transaction {
-    ($connection:expr, $block:expr) => {{
-        $connection.execute("BEGIN").await?;
-        let result = $block;
-        if result.is_ok() {
-            $connection.execute("COMMIT").await?;
-        } else {
-            $connection.execute("ROLLBACK").await?;
-        }
-        result
-    }};
-}
 
 const SCHEMA_VERSION: i32 = 6;
 
@@ -57,10 +44,7 @@ impl MetadataStore {
         type_name: &str,
         options: PutTypeOptions,
     ) -> Result<Id, PutError> {
-        transaction!(
-            self.connection,
-            self.put_type(TypeKind::Artifact, type_name, options).await
-        )
+        self.put_type(TypeKind::Artifact, type_name, options).await
     }
 
     // TODO: get_artifact_types(&mut self, options: GetTypeOptions) -> Result<Vec<ArtifactType>, GetError>>
@@ -89,10 +73,7 @@ impl MetadataStore {
         type_name: &str,
         options: PutTypeOptions,
     ) -> Result<Id, PutError> {
-        transaction!(
-            self.connection,
-            self.put_type(TypeKind::Execution, type_name, options).await
-        )
+        self.put_type(TypeKind::Execution, type_name, options).await
     }
 
     pub async fn get_execution_type(&mut self, type_name: &str) -> Result<ExecutionType, GetError> {
@@ -120,10 +101,7 @@ impl MetadataStore {
         type_name: &str,
         options: PutTypeOptions,
     ) -> Result<Id, PutError> {
-        transaction!(
-            self.connection,
-            self.put_type(TypeKind::Context, type_name, options).await
-        )
+        self.put_type(TypeKind::Context, type_name, options).await
     }
 
     pub async fn get_context_type(&mut self, type_name: &str) -> Result<ContextType, GetError> {
@@ -148,10 +126,74 @@ impl MetadataStore {
 
     pub async fn post_artifact(
         &mut self,
-        _type_id: Id,
-        _options: PostArtifactOptions,
+        type_id: Id,
+        options: PostArtifactOptions,
     ) -> Result<Id, PostError> {
-        todo!()
+        // TODO:
+        let artifact_type = self
+            .get_artifact_types()
+            .await?
+            .into_iter()
+            .find(|a| a.id == type_id)
+            .ok_or_else(|| PostError::TypeNotFound)?;
+        for (name, value) in &options.properties {
+            if artifact_type.properties.get(name).copied() != Some(value.ty()) {
+                return Err(PostError::UndefinedProperty);
+            }
+        }
+
+        let mut connection = self.connection.begin().await?;
+
+        if let Some(name) = &options.name {
+            let count: i32 = sqlx::query_scalar(self.query.check_artifac_name())
+                .bind(type_id.get())
+                .bind(name)
+                .fetch_one(&mut connection)
+                .await?;
+            if count > 0 {
+                return Err(PostError::NameConflict);
+            }
+        }
+
+        let sql = self.query.insert_artifact(&options);
+        let mut query = sqlx::query(&sql)
+            .bind(type_id.get())
+            .bind(options.state as i32)
+            .bind(options.create_time_since_epoch.as_millis() as i64)
+            .bind(options.last_update_time_since_epoch.as_millis() as i64);
+        if let Some(v) = &options.name {
+            query = query.bind(v);
+        }
+        if let Some(v) = &options.uri {
+            query = query.bind(v);
+        }
+        query.execute(&mut connection).await?;
+
+        let artifact_id: i32 = sqlx::query_scalar(self.query.get_last_artifact_id())
+            .fetch_one(&mut connection)
+            .await?;
+
+        for (name, value, is_custom) in options
+            .properties
+            .iter()
+            .map(|(k, v)| (k, v, false))
+            .chain(options.custom_properties.iter().map(|(k, v)| (k, v, true)))
+        {
+            let sql = self.query.upsert_artifact_property(value);
+            let mut query = sqlx::query(&sql)
+                .bind(artifact_id)
+                .bind(name)
+                .bind(is_custom);
+            query = match value {
+                Value::Int(v) => query.bind(*v),
+                Value::Double(v) => query.bind(*v),
+                Value::String(v) => query.bind(v),
+            };
+            query.execute(&mut connection).await?;
+        }
+
+        connection.commit().await?;
+        Ok(Id::new(artifact_id))
     }
 
     pub async fn put_artifact(&mut self, _artifact: &Artifact) -> Result<(), PutError> {
@@ -275,17 +317,18 @@ impl MetadataStore {
         type_name: &str,
         mut options: PutTypeOptions,
     ) -> Result<Id, PutError> {
+        let mut connection = self.connection.begin().await?;
         let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
             .bind(type_kind as i32)
             .bind(type_name)
-            .fetch_optional(&mut self.connection)
+            .fetch_optional(&mut connection)
             .await?;
         let ty = if let Some(ty) = ty {
             let properties = sqlx::query_as::<_, query::TypeProperty>(
                 self.query.get_type_properties_by_type_id(),
             )
             .bind(ty.id)
-            .fetch_all(&mut self.connection)
+            .fetch_all(&mut connection)
             .await?;
 
             for property in properties {
@@ -312,24 +355,24 @@ impl MetadataStore {
             sqlx::query(self.query.insert_type())
                 .bind(type_kind as i32)
                 .bind(type_name)
-                .execute(&mut self.connection)
+                .execute(&mut connection)
                 .await?;
 
-            let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
+            sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
                 .bind(type_kind as i32)
                 .bind(type_name)
-                .fetch_one(&mut self.connection)
-                .await?;
-            ty
+                .fetch_one(&mut connection)
+                .await?
         };
         for (name, value) in &options.properties {
             sqlx::query(self.query.insert_type_property())
                 .bind(ty.id)
                 .bind(name)
                 .bind(*value as i32)
-                .execute(&mut self.connection)
+                .execute(&mut connection)
                 .await?;
         }
+        connection.commit().await?;
 
         Ok(Id::new(ty.id))
     }

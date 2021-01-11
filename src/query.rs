@@ -1,6 +1,6 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
 use crate::metadata::{ConvertError, Value};
-use crate::metadata_store::options::GetArtifactsOptions;
+use crate::metadata_store::options::{GetArtifactsOptions, PostArtifactOptions};
 
 #[derive(Debug, Clone)]
 pub enum Query {
@@ -54,6 +54,40 @@ impl Query {
 
     pub fn insert_type_property(&self) -> &'static str {
         "INSERT INTO TypeProperty (type_id, name, data_type) VALUES ($1, $2, $3)"
+    }
+
+    pub fn check_artifac_name(&self) -> &'static str {
+        "SELECT count(*) FROM Artifact WHERE type_id=? AND name=?"
+    }
+
+    pub fn insert_artifact(&self, options: &PostArtifactOptions) -> String {
+        // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
+        // we can use a static INSERT statement without regarding `options`.
+        let mut fields =
+            "type_id, state, create_time_since_epoch, last_update_time_since_epoch".to_owned();
+        let mut values = "?, ?, ?, ?".to_owned();
+
+        if options.name.is_some() {
+            fields += ", name";
+            values += ", ?";
+        }
+        if options.uri.is_some() {
+            fields += ", uri";
+            values += ", ?";
+        }
+
+        format!("INSERT INTO Artifact ({}) VALUES ({})", fields, values)
+    }
+
+    pub fn upsert_artifact_property(&self, value: &Value) -> String {
+        match self {
+            Self::Sqlite(x) => x.upsert_artifact_property(value),
+            Self::Mysql(x) => x.upsert_artifact_property(value),
+        }
+    }
+
+    pub fn get_last_artifact_id(&self) -> &'static str {
+        "SELECT id FROM Artifact ORDER BY id DESC LIMIT 1"
     }
 
     pub fn get_artifact_properties(&self, n_ids: usize) -> String {
@@ -124,7 +158,7 @@ impl Query {
 pub struct SqliteQuery;
 
 impl SqliteQuery {
-    pub fn create_tables(&self) -> &'static [&'static str] {
+    fn create_tables(&self) -> &'static [&'static str] {
         &[
             concat!(
                 " CREATE TABLE IF NOT EXISTS `Type` ( ",
@@ -309,13 +343,36 @@ impl SqliteQuery {
             ),
         ]
     }
+
+    fn upsert_artifact_property(&self, value: &Value) -> String {
+        format!(
+            concat!(
+                "INSERT INTO ArtifactProperty ",
+                "(artifact_id, name, is_custom_property, int_value, double_value, string_value) ",
+                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "ON CONFLICT (artifact_id, name, is_custom_property) ",
+                "DO UPDATE SET int_value={0}, double_value={1}, string_value={2}"
+            ),
+            maybe_null(value.as_int().is_some(), "$4"),
+            maybe_null(value.as_double().is_some(), "$4"),
+            maybe_null(value.as_string().is_some(), "$4")
+        )
+    }
+}
+
+fn maybe_null(b: bool, s: &str) -> &str {
+    if b {
+        s
+    } else {
+        "NULL"
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct MysqlQuery;
 
 impl MysqlQuery {
-    pub fn create_tables(&self) -> &'static [&'static str] {
+    fn create_tables(&self) -> &'static [&'static str] {
         &[
             concat!(
                 " CREATE TABLE IF NOT EXISTS `Type` ( ",
@@ -485,6 +542,21 @@ impl MysqlQuery {
                 "             (`last_update_time_since_epoch`); "
             ),
         ]
+    }
+
+    fn upsert_artifact_property(&self, value: &Value) -> String {
+        format!(
+            concat!(
+                "INSERT INTO ArtifactProperty ",
+                "(artifact_id, name, is_custom_property, int_value, double_value, string_value) ",
+                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "ON DUPLICATE KEY ",
+                "UPDATE int_value={0}, double_value={1}, string_value={2}"
+            ),
+            maybe_null(value.as_int().is_some(), "$4"),
+            maybe_null(value.as_double().is_some(), "$4"),
+            maybe_null(value.as_string().is_some(), "$4")
+        )
     }
 }
 

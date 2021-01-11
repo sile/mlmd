@@ -1,6 +1,7 @@
-use crate::metadata::{Id, PropertyType};
+use crate::metadata::{ArtifactState, Id, PropertyType, Value};
 use crate::query::QueryValue;
 use std::collections::BTreeMap;
+use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Debug, Default, Clone)]
 pub struct PutTypeOptions {
@@ -38,8 +39,83 @@ impl PutTypeOptions {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct PostArtifactOptions {}
+#[derive(Debug, Clone)]
+pub struct PostArtifactOptions {
+    pub(crate) name: Option<String>,
+    pub(crate) uri: Option<String>,
+    pub(crate) properties: BTreeMap<String, Value>,
+    pub(crate) custom_properties: BTreeMap<String, Value>,
+    pub(crate) state: ArtifactState,
+    pub(crate) create_time_since_epoch: Duration,
+    pub(crate) last_update_time_since_epoch: Duration,
+}
+
+impl Default for PostArtifactOptions {
+    fn default() -> Self {
+        Self {
+            name: None,
+            uri: None,
+            properties: BTreeMap::new(),
+            custom_properties: BTreeMap::new(),
+            state: ArtifactState::Unknown,
+            create_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
+            last_update_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
+        }
+    }
+}
+
+impl PostArtifactOptions {
+    pub fn name(mut self, name: &str) -> Self {
+        self.name = Some(name.to_owned());
+        self
+    }
+
+    pub fn uri(mut self, uri: &str) -> Self {
+        self.uri = Some(uri.to_owned());
+        self
+    }
+
+    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.properties = properties;
+        self
+    }
+
+    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.custom_properties = properties;
+        self
+    }
+
+    pub fn property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.custom_properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn state(mut self, state: ArtifactState) -> Self {
+        self.state = state;
+        self
+    }
+
+    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
+        self.create_time_since_epoch = time;
+        self
+    }
+
+    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
+        self.last_update_time_since_epoch = time;
+        self
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct GetArtifactsOptions {

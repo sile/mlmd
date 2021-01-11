@@ -68,6 +68,7 @@ pub struct ContextType {
     pub properties: BTreeMap<String, PropertyType>,
 }
 
+// TODO: PropertyValue
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i32),
@@ -76,6 +77,14 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn ty(&self) -> PropertyType {
+        match self {
+            Self::Int(_) => PropertyType::Int,
+            Self::Double(_) => PropertyType::Double,
+            Self::String(_) => PropertyType::String,
+        }
+    }
+
     pub fn as_int(&self) -> Option<i32> {
         if let Self::Int(v) = &self {
             Some(*v)
