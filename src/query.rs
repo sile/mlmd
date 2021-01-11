@@ -27,6 +27,20 @@ impl Query {
         }
     }
 
+    pub fn insert_attribution(&self) -> &'static str {
+        match self {
+            Self::Sqlite(x) => x.insert_attribution(),
+            Self::Mysql(x) => x.insert_attribution(),
+        }
+    }
+
+    pub fn insert_association(&self) -> &'static str {
+        match self {
+            Self::Sqlite(x) => x.insert_association(),
+            Self::Mysql(x) => x.insert_association(),
+        }
+    }
+
     pub fn select_schema_version(&self) -> &'static str {
         "SELECT schema_version FROM MLMDEnv"
     }
@@ -549,6 +563,14 @@ impl SqliteQuery {
         ]
     }
 
+    fn insert_attribution(&self) -> &'static str {
+        "INSERT OR IGNORE INTO Attribution (context_id, artifact_id) VALUES (?, ?)"
+    }
+
+    fn insert_association(&self) -> &'static str {
+        "INSERT OR IGNORE INTO Association (context_id, execution_id) VALUES (?, ?)"
+    }
+
     fn upsert_artifact_property(&self, value: &Value) -> String {
         format!(
             concat!(
@@ -777,6 +799,14 @@ impl MysqlQuery {
                 "             (`last_update_time_since_epoch`); "
             ),
         ]
+    }
+
+    fn insert_attribution(&self) -> &'static str {
+        "INSERT IGNORE INTO Attribution (context_id, artifact_id) VALUES (?, ?)"
+    }
+
+    fn insert_association(&self) -> &'static str {
+        "INSERT IGNORE INTO Association (context_id, execution_id) VALUES (?, ?)"
     }
 
     fn upsert_artifact_property(&self, value: &Value) -> String {

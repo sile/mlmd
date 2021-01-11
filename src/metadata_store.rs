@@ -766,6 +766,32 @@ impl MetadataStore {
         Ok(contexts.into_iter().map(|(_, v)| v).collect())
     }
 
+    pub async fn put_attribution(
+        &mut self,
+        context_id: Id,
+        artifact_id: Id,
+    ) -> Result<(), PutError> {
+        sqlx::query(self.query.insert_attribution())
+            .bind(context_id.get())
+            .bind(artifact_id.get())
+            .execute(&mut self.connection)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn put_association(
+        &mut self,
+        context_id: Id,
+        execution_id: Id,
+    ) -> Result<(), PutError> {
+        sqlx::query(self.query.insert_association())
+            .bind(context_id.get())
+            .bind(execution_id.get())
+            .execute(&mut self.connection)
+            .await?;
+        Ok(())
+    }
+
     async fn initialize_database(&mut self) -> Result<(), InitError> {
         if sqlx::query(self.query.select_schema_version())
             .fetch_all(&mut self.connection)

@@ -267,18 +267,6 @@ pub struct Context {
 // }
 
 // #[derive(Debug, Clone)]
-// pub struct Attribution {
-//     pub artifact_id: ArtifactId,
-//     pub context_id: ContextId,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct Association {
-//     pub execution_id: ExecutionId,
-//     pub context_id: ContextId,
-// }
-
-// #[derive(Debug, Clone)]
 // pub struct ParentContext {
 //     pub child_id: ContextId,
 //     pub parent_id: ContextId,

@@ -633,6 +633,35 @@ async fn get_context_types_works() {
     assert_eq!(types[0].name, "Experiment");
 }
 
+#[async_std::test]
+async fn put_attribution_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new().unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+
+    let t0 = store.put_artifact_type("t0", default()).await?;
+    let a0 = store.post_artifact(t0, default()).await?;
+    let _a1 = store.post_artifact(t0, default()).await?;
+
+    let t1 = store.put_context_type("t1", default()).await?;
+    let _c0 = store.post_context(t1, "foo", default()).await?;
+    let c1 = store.post_context(t1, "bar", default()).await?;
+
+    store.put_attribution(c1, a0).await?;
+    let contexts = store
+        .get_contexts(GetContextsOptions::default().artifact(a0))
+        .await?;
+    assert_eq!(contexts.len(), 1);
+    assert_eq!(contexts[0].id, c1);
+
+    let artifacts = store
+        .get_artifacts(GetArtifactsOptions::default().context(c1))
+        .await?;
+    assert_eq!(artifacts.len(), 1);
+    assert_eq!(artifacts[0].id, a0);
+
+    Ok(())
+}
+
 fn sqlite_uri(path: impl AsRef<std::path::Path>) -> String {
     format!(
         "sqlite://{}",
