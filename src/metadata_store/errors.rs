@@ -11,6 +11,7 @@ pub enum InitError {
     #[error("schema version {actual} is not supported (expected version is {expected})")]
     UnsupportedSchemaVersion { actual: i32, expected: i32 },
 
+    // TODO: Bug
     #[error("there are {count} MLMDEnv records (only one record is expected)")]
     TooManyMlmdEnvRecords { count: usize },
 }
@@ -20,11 +21,17 @@ pub enum GetError {
     #[error("database error")]
     Db(#[from] sqlx::Error),
 
-    #[error("conversion error")]
-    Convert(#[from] ConvertError),
+    #[error("an invalid value is stored in the database")]
+    InvalidValue(#[from] ConvertError),
+}
 
-    #[error("{target} is not found")]
-    NotFound { target: String },
+#[derive(Debug, thiserror::Error)]
+pub enum PutTypeError {
+    #[error("database error")]
+    Db(#[from] sqlx::Error),
+
+    #[error("{kind} type with the name {name} already exists")]
+    AlreadyExists { kind: &'static str, name: String },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -34,9 +41,6 @@ pub enum PutError {
 
     #[error("conversion error")]
     Convert(#[from] ConvertError),
-
-    #[error("{kind} type with the name {name} already exists")]
-    TypeAlreadyExists { kind: &'static str, name: String },
 
     #[error("type not found")]
     TypeNotFound,

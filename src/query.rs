@@ -2,7 +2,7 @@
 use crate::metadata::{self, ConvertError, EventStep, Value};
 use crate::metadata_store::options::{
     GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
-    PostArtifactOptions, PostExecutionOptions,
+    GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
 };
 
 #[derive(Debug, Clone)]
@@ -49,8 +49,23 @@ impl Query {
         "INSERT INTO MLMDEnv VALUES ($1)"
     }
 
-    pub fn get_types(&self) -> &'static str {
-        "SELECT id, name FROM Type WHERE type_kind=$1"
+    pub fn get_types(&self, options: &GetTypesOptions) -> String {
+        let mut query = "SELECT id, name FROM Type WHERE type_kind=? ".to_owned();
+        if options.name.is_some() {
+            query += "AND name = ? ";
+        }
+        if !options.ids.is_empty() {
+            query += &format!(
+                "AND id IN ({})",
+                options
+                    .ids
+                    .iter()
+                    .map(|_| "?")
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+        }
+        query
     }
 
     pub fn get_type_properties(&self) -> &'static str {

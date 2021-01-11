@@ -1,19 +1,21 @@
-use self::errors::{GetError, InitError, PostError, PutError};
+use self::errors::{GetError, InitError, PostError, PutError, PutTypeError};
 use self::options::{
     GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
-    PostArtifactOptions, PostContextOptions, PostExecutionOptions, PutEventOptions, PutTypeOptions,
+    GetTypesOptions, PostArtifactOptions, PostContextOptions, PostExecutionOptions,
+    PutEventOptions, PutTypeOptions,
 };
 use crate::metadata::{
-    Artifact, ArtifactState, ArtifactType, Context, ContextType, Event, EventStep, EventType,
-    Execution, ExecutionState, ExecutionType, Id, PropertyType, Value,
+    Artifact, ArtifactState, Context, Event, EventStep, EventType, Execution, ExecutionState, Id,
+    PropertyType, Value,
 };
 use crate::query::{self, Query, TypeKind};
+use crate::requests;
 use futures::TryStreamExt as _;
 use sqlx::{AnyConnection, Connection as _, Row as _};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-mod errors;
+pub mod errors;
 pub mod options;
 #[cfg(test)]
 mod tests;
@@ -43,89 +45,28 @@ impl MetadataStore {
         Ok(this)
     }
 
-    pub async fn put_artifact_type(
-        &mut self,
-        type_name: &str,
-        options: PutTypeOptions,
-    ) -> Result<Id, PutError> {
-        self.put_type(TypeKind::Artifact, type_name, options).await
+    pub fn put_artifact_type(&mut self, type_name: &str) -> requests::PutArtifactTypeRequest {
+        requests::PutArtifactTypeRequest::new(self, type_name)
     }
 
-    // TODO: get_artifact_types(&mut self, options: GetTypeOptions) -> Result<Vec<ArtifactType>, GetError>>
-    pub async fn get_artifact_type(&mut self, type_name: &str) -> Result<ArtifactType, GetError> {
-        let (id, properties) = self.get_type(TypeKind::Artifact, type_name).await?;
-        Ok(ArtifactType {
-            id,
-            name: type_name.to_owned(),
-            properties,
-        })
+    pub fn get_artifact_types(&mut self) -> requests::GetArtifactTypesRequest {
+        requests::GetArtifactTypesRequest::new(self)
     }
 
-    pub async fn get_artifact_types(&mut self) -> Result<Vec<ArtifactType>, GetError> {
-        let types = self
-            .get_types(TypeKind::Artifact, |id, name, properties| ArtifactType {
-                id,
-                name,
-                properties,
-            })
-            .await?;
-        Ok(types)
+    pub fn put_execution_type(&mut self, type_name: &str) -> requests::PutExecutionTypeRequest {
+        requests::PutExecutionTypeRequest::new(self, type_name)
     }
 
-    pub async fn put_execution_type(
-        &mut self,
-        type_name: &str,
-        options: PutTypeOptions,
-    ) -> Result<Id, PutError> {
-        self.put_type(TypeKind::Execution, type_name, options).await
+    pub fn get_execution_types(&mut self) -> requests::GetExecutionTypesRequest {
+        requests::GetExecutionTypesRequest::new(self)
     }
 
-    pub async fn get_execution_type(&mut self, type_name: &str) -> Result<ExecutionType, GetError> {
-        let (id, properties) = self.get_type(TypeKind::Execution, type_name).await?;
-        Ok(ExecutionType {
-            id,
-            name: type_name.to_owned(),
-            properties,
-        })
+    pub fn put_context_type(&mut self, type_name: &str) -> requests::PutContextTypeRequest {
+        requests::PutContextTypeRequest::new(self, type_name)
     }
 
-    pub async fn get_execution_types(&mut self) -> Result<Vec<ExecutionType>, GetError> {
-        let types = self
-            .get_types(TypeKind::Execution, |id, name, properties| ExecutionType {
-                id,
-                name,
-                properties,
-            })
-            .await?;
-        Ok(types)
-    }
-
-    pub async fn put_context_type(
-        &mut self,
-        type_name: &str,
-        options: PutTypeOptions,
-    ) -> Result<Id, PutError> {
-        self.put_type(TypeKind::Context, type_name, options).await
-    }
-
-    pub async fn get_context_type(&mut self, type_name: &str) -> Result<ContextType, GetError> {
-        let (id, properties) = self.get_type(TypeKind::Context, type_name).await?;
-        Ok(ContextType {
-            id,
-            name: type_name.to_owned(),
-            properties,
-        })
-    }
-
-    pub async fn get_context_types(&mut self) -> Result<Vec<ContextType>, GetError> {
-        let types = self
-            .get_types(TypeKind::Context, |id, name, properties| ContextType {
-                id,
-                name,
-                properties,
-            })
-            .await?;
-        Ok(types)
+    pub fn get_context_types(&mut self) -> requests::GetContextTypesRequest {
+        requests::GetContextTypesRequest::new(self)
     }
 
     pub async fn post_artifact(
@@ -133,12 +74,13 @@ impl MetadataStore {
         type_id: Id,
         options: PostArtifactOptions,
     ) -> Result<Id, PostError> {
-        // TODO: optimize
         let artifact_type = self
             .get_artifact_types()
+            .id(type_id)
+            .execute()
             .await?
             .into_iter()
-            .find(|a| a.id == type_id)
+            .nth(0)
             .ok_or_else(|| PostError::TypeNotFound)?;
         for (name, value) in &options.properties {
             if artifact_type.properties.get(name).copied() != Some(value.ty()) {
@@ -203,12 +145,13 @@ impl MetadataStore {
 
     // TODO: remove redundant code
     pub async fn put_artifact(&mut self, artifact: &Artifact) -> Result<(), PutError> {
-        // TODO: optimize
         let artifact_type = self
             .get_artifact_types()
+            .id(artifact.type_id)
+            .execute()
             .await?
             .into_iter()
-            .find(|a| a.id == artifact.type_id)
+            .nth(0)
             .ok_or_else(|| PutError::TypeNotFound)?;
         for (name, value) in &artifact.properties {
             if artifact_type.properties.get(name).copied() != Some(value.ty()) {
@@ -352,12 +295,13 @@ impl MetadataStore {
         type_id: Id,
         options: PostExecutionOptions,
     ) -> Result<Id, PostError> {
-        // TODO: optimize
         let execution_type = self
             .get_execution_types()
+            .id(type_id)
+            .execute()
             .await?
             .into_iter()
-            .find(|a| a.id == type_id)
+            .nth(0)
             .ok_or_else(|| PostError::TypeNotFound)?;
         for (name, value) in &options.properties {
             if execution_type.properties.get(name).copied() != Some(value.ty()) {
@@ -419,12 +363,13 @@ impl MetadataStore {
 
     // TODO: remove redundant code
     pub async fn put_execution(&mut self, execution: &Execution) -> Result<(), PutError> {
-        // TODO: optimize
         let execution_type = self
             .get_execution_types()
+            .id(execution.type_id)
+            .execute()
             .await?
             .into_iter()
-            .find(|a| a.id == execution.type_id)
+            .nth(0)
             .ok_or_else(|| PutError::TypeNotFound)?;
         for (name, value) in &execution.properties {
             if execution_type.properties.get(name).copied() != Some(value.ty()) {
@@ -570,12 +515,13 @@ impl MetadataStore {
         context_name: &str,
         options: PostContextOptions,
     ) -> Result<Id, PostError> {
-        // TODO: optimize
         let context_type = self
             .get_context_types()
+            .id(type_id)
+            .execute()
             .await?
             .into_iter()
-            .find(|a| a.id == type_id)
+            .nth(0)
             .ok_or_else(|| PostError::TypeNotFound)?;
         for (name, value) in &options.properties {
             if context_type.properties.get(name).copied() != Some(value.ty()) {
@@ -633,12 +579,13 @@ impl MetadataStore {
 
     // TODO: remove redundant code
     pub async fn put_context(&mut self, context: &Context) -> Result<(), PutError> {
-        // TODO: optimize
         let context_type = self
             .get_context_types()
+            .id(context.type_id)
+            .execute()
             .await?
             .into_iter()
-            .find(|a| a.id == context.type_id)
+            .nth(0)
             .ok_or_else(|| PutError::TypeNotFound)?;
         for (name, value) in &context.properties {
             if context_type.properties.get(name).copied() != Some(value.ty()) {
@@ -918,12 +865,12 @@ impl MetadataStore {
         Ok(())
     }
 
-    async fn put_type(
+    pub(crate) async fn put_type(
         &mut self,
         type_kind: TypeKind,
         type_name: &str,
         mut options: PutTypeOptions,
-    ) -> Result<Id, PutError> {
+    ) -> Result<Id, PutTypeError> {
         let mut connection = self.connection.begin().await?;
         let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
             .bind(type_kind as i32)
@@ -943,7 +890,7 @@ impl MetadataStore {
                     None if options.can_omit_fields => {}
                     Some(v) if v as i32 == property.data_type => {}
                     _ => {
-                        return Err(PutError::TypeAlreadyExists {
+                        return Err(PutTypeError::AlreadyExists {
                             kind: type_kind.as_str(),
                             name: type_name.to_owned(),
                         });
@@ -951,7 +898,7 @@ impl MetadataStore {
                 }
             }
             if !options.properties.is_empty() && !options.can_add_fields {
-                return Err(PutError::TypeAlreadyExists {
+                return Err(PutTypeError::AlreadyExists {
                     kind: type_kind.as_str(),
                     name: type_name.to_owned(),
                 });
@@ -984,14 +931,26 @@ impl MetadataStore {
         Ok(Id::new(ty.id))
     }
 
-    async fn get_types<F, T>(&mut self, type_kind: TypeKind, f: F) -> Result<Vec<T>, GetError>
+    pub(crate) async fn get_types<F, T>(
+        &mut self,
+        type_kind: TypeKind,
+        f: F,
+        options: GetTypesOptions,
+    ) -> Result<Vec<T>, GetError>
     where
         F: Fn(Id, String, BTreeMap<String, PropertyType>) -> T,
     {
+        let sql = self.query.get_types(&options);
+        let mut query = sqlx::query_as::<_, query::Type>(&sql).bind(type_kind as i32);
+        if let Some(v) = &options.name {
+            query = query.bind(v);
+        }
+        for id in &options.ids {
+            query = query.bind(id.get());
+        }
+
         let mut types = BTreeMap::new();
-        let mut rows = sqlx::query_as::<_, query::Type>(self.query.get_types())
-            .bind(type_kind as i32)
-            .fetch(&mut self.connection);
+        let mut rows = query.fetch(&mut self.connection);
         while let Some(row) = rows.try_next().await? {
             types.insert(row.id, (row.name, BTreeMap::new()));
         }
@@ -1009,31 +968,5 @@ impl MetadataStore {
             .into_iter()
             .map(|(id, (name, properties))| f(Id::new(id), name, properties))
             .collect())
-    }
-
-    async fn get_type(
-        &mut self,
-        type_kind: TypeKind,
-        type_name: &str,
-    ) -> Result<(Id, BTreeMap<String, PropertyType>), GetError> {
-        let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
-            .bind(type_kind as i32)
-            .bind(type_name)
-            .fetch_optional(&mut self.connection)
-            .await?;
-        let ty = ty.ok_or_else(|| GetError::NotFound {
-            target: format!("artifact type with the name {:?}", type_name),
-        })?;
-
-        let mut properties = BTreeMap::new();
-        let mut rows =
-            sqlx::query_as::<_, query::TypeProperty>(self.query.get_type_properties_by_type_id())
-                .bind(ty.id)
-                .fetch(&mut self.connection);
-        while let Some(row) = rows.try_next().await? {
-            properties.insert(row.name, PropertyType::from_i32(row.data_type)?);
-        }
-
-        Ok((Id::new(ty.id), properties))
     }
 }

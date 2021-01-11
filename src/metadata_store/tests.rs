@@ -1,5 +1,5 @@
 use super::*;
-use crate::metadata::Value;
+use crate::metadata::{ArtifactType, ContextType, ExecutionType, Value};
 use tempfile::NamedTempFile;
 
 #[async_std::test]
@@ -14,77 +14,71 @@ async fn initialization_works() {
 }
 
 #[async_std::test]
-async fn put_artifact_type_works() {
-    let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+async fn put_artifact_type_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new()?;
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let options = PutTypeOptions::default();
     store
-        .put_artifact_type("t0", options.clone().property_int("p0"))
-        .await
-        .unwrap();
+        .put_artifact_type("t0")
+        .property("p0", PropertyType::Int)
+        .execute()
+        .await?;
 
     assert!(matches!(
         store
-            .put_artifact_type("t0", options.clone().property_double("p0"))
+            .put_artifact_type("t0")
+            .property("p0", PropertyType::Double)
+            .execute()
             .await,
-        Err(PutError::TypeAlreadyExists { .. })
+        Err(PutTypeError::AlreadyExists { .. })
     ));
 
     assert!(matches!(
         store
-            .put_artifact_type(
-                "t0",
-                options.clone().property_int("p0").property_string("p1")
-            )
+            .put_artifact_type("t0")
+            .property("p0", PropertyType::Int)
+            .property("p1", PropertyType::String)
+            .execute()
             .await,
-        Err(PutError::TypeAlreadyExists { .. })
+        Err(PutTypeError::AlreadyExists { .. })
     ));
     store
-        .put_artifact_type(
-            "t0",
-            options
-                .clone()
-                .can_add_fields()
-                .property_int("p0")
-                .property_string("p1"),
-        )
-        .await
-        .unwrap();
+        .put_artifact_type("t0")
+        .can_add_fields()
+        .property("p0", PropertyType::Int)
+        .property("p1", PropertyType::String)
+        .execute()
+        .await?;
 
     assert!(matches!(
-        store.put_artifact_type("t0", options.clone()).await,
-        Err(PutError::TypeAlreadyExists { .. })
+        store.put_artifact_type("t0").execute().await,
+        Err(PutTypeError::AlreadyExists { .. })
     ));
     store
-        .put_artifact_type("t0", options.clone().can_omit_fields())
-        .await
-        .unwrap();
+        .put_artifact_type("t0")
+        .can_omit_fields()
+        .execute()
+        .await?;
+    store.put_artifact_type("t1").execute().await?;
 
-    store
-        .put_artifact_type("t1", options.clone())
-        .await
-        .unwrap();
+    Ok(())
 }
 
 #[async_std::test]
-async fn get_artifact_type_works() {
-    let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+async fn get_artifact_type_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new()?;
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let options = PutTypeOptions::default();
     let t0_id = store
-        .put_artifact_type("t0", options.clone().property_int("p0"))
-        .await
-        .unwrap();
-    let t1_id = store
-        .put_artifact_type("t1", options.clone())
-        .await
-        .unwrap();
+        .put_artifact_type("t0")
+        .property("p0", PropertyType::Int)
+        .execute()
+        .await?;
+    let t1_id = store.put_artifact_type("t1").execute().await?;
     assert_ne!(t0_id, t1_id);
 
     assert_eq!(
-        store.get_artifact_type("t0").await.unwrap(),
+        store.get_artifact_types().name("t0").execute().await?[0],
         ArtifactType {
             id: t0_id,
             name: "t0".to_owned(),
@@ -94,27 +88,32 @@ async fn get_artifact_type_works() {
         }
     );
     assert_eq!(
-        store.get_artifact_type("t1").await.unwrap(),
+        store.get_artifact_types().name("t1").execute().await?[0],
         ArtifactType {
             id: t1_id,
             name: "t1".to_owned(),
             properties: BTreeMap::new(),
         }
     );
-    assert!(matches!(
-        store.get_artifact_type("t2").await.err(),
-        Some(GetError::NotFound { .. })
-    ));
+    assert!(store
+        .get_artifact_types()
+        .name("t2")
+        .execute()
+        .await?
+        .is_empty());
+
+    Ok(())
 }
 
 #[async_std::test]
-async fn get_artifact_types_works() {
+async fn get_artifact_types_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
-    let types = store.get_artifact_types().await.unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let types = store.get_artifact_types().execute().await?;
     assert_eq!(types.len(), 2);
     assert_eq!(types[0].name, "DataSet");
     assert_eq!(types[1].name, "SavedModel");
+    Ok(())
 }
 
 #[async_std::test]
@@ -167,12 +166,10 @@ async fn post_artifact_works() -> anyhow::Result<()> {
     assert!(store.get_artifacts(default()).await?.is_empty());
 
     let type_id = store
-        .put_artifact_type(
-            "DataSet",
-            PutTypeOptions::default()
-                .property_int("day")
-                .property_string("split"),
-        )
+        .put_artifact_type("DataSet")
+        .property("day", PropertyType::Int)
+        .property("split", PropertyType::String)
+        .execute()
         .await?;
 
     // Simple artifact.
@@ -306,12 +303,10 @@ async fn post_execution_works() -> anyhow::Result<()> {
     assert!(store.get_executions(default()).await?.is_empty());
 
     let type_id = store
-        .put_execution_type(
-            "DataSet",
-            PutTypeOptions::default()
-                .property_int("day")
-                .property_string("split"),
-        )
+        .put_execution_type("DataSet")
+        .property("day", PropertyType::Int)
+        .property("split", PropertyType::String)
+        .execute()
         .await?;
 
     // Simple execution.
@@ -337,77 +332,71 @@ async fn post_execution_works() -> anyhow::Result<()> {
 }
 
 #[async_std::test]
-async fn put_execution_type_works() {
-    let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+async fn put_execution_type_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new()?;
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let options = PutTypeOptions::default();
     store
-        .put_execution_type("t0", options.clone().property_int("p0"))
-        .await
-        .unwrap();
+        .put_execution_type("t0")
+        .property("p0", PropertyType::Int)
+        .execute()
+        .await?;
 
     assert!(matches!(
         store
-            .put_execution_type("t0", options.clone().property_double("p0"))
+            .put_execution_type("t0")
+            .property("p0", PropertyType::Double)
+            .execute()
             .await,
-        Err(PutError::TypeAlreadyExists { .. })
+        Err(PutTypeError::AlreadyExists { .. })
     ));
 
     assert!(matches!(
         store
-            .put_execution_type(
-                "t0",
-                options.clone().property_int("p0").property_string("p1")
-            )
+            .put_execution_type("t0")
+            .property("p0", PropertyType::Int)
+            .property("p1", PropertyType::String)
+            .execute()
             .await,
-        Err(PutError::TypeAlreadyExists { .. })
+        Err(PutTypeError::AlreadyExists { .. })
     ));
     store
-        .put_execution_type(
-            "t0",
-            options
-                .clone()
-                .can_add_fields()
-                .property_int("p0")
-                .property_string("p1"),
-        )
-        .await
-        .unwrap();
+        .put_execution_type("t0")
+        .can_add_fields()
+        .property("p0", PropertyType::Int)
+        .property("p1", PropertyType::String)
+        .execute()
+        .await?;
 
     assert!(matches!(
-        store.put_execution_type("t0", options.clone()).await,
-        Err(PutError::TypeAlreadyExists { .. })
+        store.put_execution_type("t0").execute().await,
+        Err(PutTypeError::AlreadyExists { .. })
     ));
     store
-        .put_execution_type("t0", options.clone().can_omit_fields())
-        .await
-        .unwrap();
+        .put_execution_type("t0")
+        .can_omit_fields()
+        .execute()
+        .await?;
+    store.put_execution_type("t1").execute().await?;
 
-    store
-        .put_execution_type("t1", options.clone())
-        .await
-        .unwrap();
+    Ok(())
 }
 
 #[async_std::test]
-async fn get_execution_type_works() {
-    let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+async fn get_execution_type_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new()?;
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let options = PutTypeOptions::default();
     let t0_id = store
-        .put_execution_type("t0", options.clone().property_int("p0"))
-        .await
-        .unwrap();
-    let t1_id = store
-        .put_execution_type("t1", options.clone())
-        .await
-        .unwrap();
+        .put_execution_type("t0")
+        .property("p0", PropertyType::Int)
+        .execute()
+        .await?;
+    let t1_id = store.put_execution_type("t1").execute().await?;
     assert_ne!(t0_id, t1_id);
 
     assert_eq!(
-        store.get_execution_type("t0").await.unwrap(),
+        store.get_execution_types().name("t0").execute().await?[0],
         ExecutionType {
             id: t0_id,
             name: "t0".to_owned(),
@@ -417,26 +406,31 @@ async fn get_execution_type_works() {
         }
     );
     assert_eq!(
-        store.get_execution_type("t1").await.unwrap(),
+        store.get_execution_types().name("t1").execute().await?[0],
         ExecutionType {
             id: t1_id,
             name: "t1".to_owned(),
             properties: BTreeMap::new(),
         }
     );
-    assert!(matches!(
-        store.get_execution_type("t2").await.err(),
-        Some(GetError::NotFound { .. })
-    ));
+    assert!(store
+        .get_execution_types()
+        .name("t2")
+        .execute()
+        .await?
+        .is_empty());
+
+    Ok(())
 }
 
 #[async_std::test]
-async fn get_execution_types_works() {
+async fn get_execution_types_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
-    let types = store.get_execution_types().await.unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let types = store.get_execution_types().execute().await?;
     assert_eq!(types.len(), 1);
     assert_eq!(types[0].name, "Trainer");
+    Ok(())
 }
 
 #[async_std::test]
@@ -517,7 +511,7 @@ async fn post_context_works() -> anyhow::Result<()> {
 
     assert!(store.get_contexts(default()).await?.is_empty());
 
-    let type_id = store.put_context_type("Context", default()).await?;
+    let type_id = store.put_context_type("Context").execute().await?;
 
     // Simple context.
     let context_id = store.post_context(type_id, "bar", default()).await?;
@@ -537,71 +531,71 @@ async fn post_context_works() -> anyhow::Result<()> {
 }
 
 #[async_std::test]
-async fn put_context_type_works() {
-    let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+async fn put_context_type_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new()?;
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let options = PutTypeOptions::default();
     store
-        .put_context_type("t0", options.clone().property_int("p0"))
-        .await
-        .unwrap();
+        .put_context_type("t0")
+        .property("p0", PropertyType::Int)
+        .execute()
+        .await?;
 
     assert!(matches!(
         store
-            .put_context_type("t0", options.clone().property_double("p0"))
+            .put_context_type("t0")
+            .property("p0", PropertyType::Double)
+            .execute()
             .await,
-        Err(PutError::TypeAlreadyExists { .. })
+        Err(PutTypeError::AlreadyExists { .. })
     ));
 
     assert!(matches!(
         store
-            .put_context_type(
-                "t0",
-                options.clone().property_int("p0").property_string("p1")
-            )
+            .put_context_type("t0")
+            .property("p0", PropertyType::Int)
+            .property("p1", PropertyType::String)
+            .execute()
             .await,
-        Err(PutError::TypeAlreadyExists { .. })
+        Err(PutTypeError::AlreadyExists { .. })
     ));
     store
-        .put_context_type(
-            "t0",
-            options
-                .clone()
-                .can_add_fields()
-                .property_int("p0")
-                .property_string("p1"),
-        )
-        .await
-        .unwrap();
+        .put_context_type("t0")
+        .can_add_fields()
+        .property("p0", PropertyType::Int)
+        .property("p1", PropertyType::String)
+        .execute()
+        .await?;
 
     assert!(matches!(
-        store.put_context_type("t0", options.clone()).await,
-        Err(PutError::TypeAlreadyExists { .. })
+        store.put_context_type("t0").execute().await,
+        Err(PutTypeError::AlreadyExists { .. })
     ));
     store
-        .put_context_type("t0", options.clone().can_omit_fields())
-        .await
-        .unwrap();
+        .put_context_type("t0")
+        .can_omit_fields()
+        .execute()
+        .await?;
+    store.put_context_type("t1").execute().await?;
 
-    store.put_context_type("t1", options.clone()).await.unwrap();
+    Ok(())
 }
 
 #[async_std::test]
-async fn get_context_type_works() {
-    let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+async fn get_context_type_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new()?;
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let options = PutTypeOptions::default();
     let t0_id = store
-        .put_context_type("t0", options.clone().property_int("p0"))
-        .await
-        .unwrap();
-    let t1_id = store.put_context_type("t1", options.clone()).await.unwrap();
+        .put_context_type("t0")
+        .property("p0", PropertyType::Int)
+        .execute()
+        .await?;
+    let t1_id = store.put_context_type("t1").execute().await?;
     assert_ne!(t0_id, t1_id);
 
     assert_eq!(
-        store.get_context_type("t0").await.unwrap(),
+        store.get_context_types().name("t0").execute().await?[0],
         ContextType {
             id: t0_id,
             name: "t0".to_owned(),
@@ -611,26 +605,31 @@ async fn get_context_type_works() {
         }
     );
     assert_eq!(
-        store.get_context_type("t1").await.unwrap(),
+        store.get_context_types().name("t1").execute().await?[0],
         ContextType {
             id: t1_id,
             name: "t1".to_owned(),
             properties: BTreeMap::new(),
         }
     );
-    assert!(matches!(
-        store.get_context_type("t2").await.err(),
-        Some(GetError::NotFound { .. })
-    ));
+    assert!(store
+        .get_context_types()
+        .name("t2")
+        .execute()
+        .await?
+        .is_empty(),);
+
+    Ok(())
 }
 
 #[async_std::test]
-async fn get_context_types_works() {
+async fn get_context_types_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
-    let types = store.get_context_types().await.unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let types = store.get_context_types().execute().await?;
     assert_eq!(types.len(), 1);
     assert_eq!(types[0].name, "Experiment");
+    Ok(())
 }
 
 #[async_std::test]
@@ -638,11 +637,11 @@ async fn put_attribution_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
-    let t0 = store.put_artifact_type("t0", default()).await?;
+    let t0 = store.put_artifact_type("t0").execute().await?;
     let a0 = store.post_artifact(t0, default()).await?;
     let _a1 = store.post_artifact(t0, default()).await?;
 
-    let t1 = store.put_context_type("t1", default()).await?;
+    let t1 = store.put_context_type("t1").execute().await?;
     let _c0 = store.post_context(t1, "foo", default()).await?;
     let c1 = store.post_context(t1, "bar", default()).await?;
 
@@ -667,11 +666,11 @@ async fn put_association_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
-    let t0 = store.put_execution_type("t0", default()).await?;
+    let t0 = store.put_execution_type("t0").execute().await?;
     let e0 = store.post_execution(t0, default()).await?;
     let _e1 = store.post_execution(t0, default()).await?;
 
-    let t1 = store.put_context_type("t1", default()).await?;
+    let t1 = store.put_context_type("t1").execute().await?;
     let _c0 = store.post_context(t1, "foo", default()).await?;
     let c1 = store.post_context(t1, "bar", default()).await?;
 
@@ -696,11 +695,11 @@ async fn put_event_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
-    let t0 = store.put_execution_type("t0", default()).await?;
+    let t0 = store.put_execution_type("t0").execute().await?;
     let e0 = store.post_execution(t0, default()).await?;
     let e1 = store.post_execution(t0, default()).await?;
 
-    let t1 = store.put_artifact_type("t1", default()).await?;
+    let t1 = store.put_artifact_type("t1").execute().await?;
     let a0 = store.post_artifact(t1, default()).await?;
     let a1 = store.post_artifact(t1, default()).await?;
 
