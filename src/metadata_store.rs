@@ -129,7 +129,7 @@ impl MetadataStore {
         type_id: Id,
         options: PostArtifactOptions,
     ) -> Result<Id, PostError> {
-        // TODO:
+        // TODO: optimize
         let artifact_type = self
             .get_artifact_types()
             .await?
@@ -148,6 +148,7 @@ impl MetadataStore {
             let count: i32 = sqlx::query_scalar(self.query.check_artifac_name())
                 .bind(type_id.get())
                 .bind(name)
+                .bind(-1) // dummy artifact id (TODO)
                 .fetch_one(&mut connection)
                 .await?;
             if count > 0 {
@@ -196,8 +197,82 @@ impl MetadataStore {
         Ok(Id::new(artifact_id))
     }
 
-    pub async fn put_artifact(&mut self, _artifact: &Artifact) -> Result<(), PutError> {
-        todo!()
+    // TODO: remove redundant code
+    pub async fn put_artifact(&mut self, artifact: &Artifact) -> Result<(), PutError> {
+        // TODO: optimize
+        let artifact_type = self
+            .get_artifact_types()
+            .await?
+            .into_iter()
+            .find(|a| a.id == artifact.type_id)
+            .ok_or_else(|| PutError::TypeNotFound)?;
+        for (name, value) in &artifact.properties {
+            if artifact_type.properties.get(name).copied() != Some(value.ty()) {
+                return Err(PutError::UndefinedProperty);
+            }
+        }
+
+        // TODO: check if type id is unchanged
+        let old = self
+            .get_artifact(artifact.id)
+            .await?
+            .ok_or_else(|| PutError::NotFound)?;
+        if old.type_id != artifact.id {
+            return Err(PutError::WrongTypeId);
+        }
+
+        let mut connection = self.connection.begin().await?;
+
+        if let Some(name) = &artifact.name {
+            let count: i32 = sqlx::query_scalar(self.query.check_artifac_name())
+                .bind(artifact.type_id.get())
+                .bind(name)
+                .bind(artifact.id.get())
+                .fetch_one(&mut connection)
+                .await?;
+            if count > 0 {
+                return Err(PutError::NameConflict);
+            }
+        }
+
+        let sql = self.query.update_artifact(&artifact);
+        let mut query = sqlx::query(&sql)
+            .bind(artifact.state as i32)
+            .bind(artifact.create_time_since_epoch.as_millis() as i64)
+            .bind(artifact.last_update_time_since_epoch.as_millis() as i64);
+        if let Some(v) = &artifact.name {
+            query = query.bind(v);
+        }
+        if let Some(v) = &artifact.uri {
+            query = query.bind(v);
+        }
+        query
+            .bind(artifact.id.get())
+            .execute(&mut connection)
+            .await?;
+
+        for (name, value, is_custom) in artifact
+            .properties
+            .iter()
+            .map(|(k, v)| (k, v, false))
+            .chain(artifact.custom_properties.iter().map(|(k, v)| (k, v, true)))
+        {
+            let sql = self.query.upsert_artifact_property(value);
+            dbg!(&sql);
+            let mut query = sqlx::query(&sql)
+                .bind(artifact.id.get())
+                .bind(name)
+                .bind(is_custom);
+            query = match value {
+                Value::Int(v) => query.bind(*v),
+                Value::Double(v) => query.bind(*v),
+                Value::String(v) => query.bind(v),
+            };
+            query.execute(&mut connection).await?;
+        }
+
+        connection.commit().await?;
+        Ok(())
     }
 
     pub async fn get_artifact(&mut self, artifact_id: Id) -> Result<Option<Artifact>, GetError> {

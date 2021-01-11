@@ -1,5 +1,5 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{ConvertError, Value};
+use crate::metadata::{self, ConvertError, Value};
 use crate::metadata_store::options::{GetArtifactsOptions, PostArtifactOptions};
 
 #[derive(Debug, Clone)]
@@ -57,7 +57,7 @@ impl Query {
     }
 
     pub fn check_artifac_name(&self) -> &'static str {
-        "SELECT count(*) FROM Artifact WHERE type_id=? AND name=?"
+        "SELECT count(*) FROM Artifact WHERE type_id=? AND name=? AND id != ?"
     }
 
     pub fn insert_artifact(&self, options: &PostArtifactOptions) -> String {
@@ -77,6 +77,21 @@ impl Query {
         }
 
         format!("INSERT INTO Artifact ({}) VALUES ({})", fields, values)
+    }
+
+    pub fn update_artifact(&self, artifact: &metadata::Artifact) -> String {
+        // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
+        // we can use a static UPDATE statement.
+        let mut fields =
+            "state=?, create_time_since_epoch=?, last_update_time_since_epoch=?".to_owned();
+        if artifact.name.is_some() {
+            fields += ", name=?";
+        }
+        if artifact.uri.is_some() {
+            fields += ", uri=?";
+        }
+
+        format!("UPDATE Artifact SET {} WHERE id=?", fields)
     }
 
     pub fn upsert_artifact_property(&self, value: &Value) -> String {

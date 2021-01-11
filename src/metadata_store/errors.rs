@@ -37,6 +37,24 @@ pub enum PutError {
 
     #[error("{kind} type with the name {name} already exists")]
     TypeAlreadyExists { kind: &'static str, name: String },
+
+    #[error("type not found")]
+    TypeNotFound,
+
+    #[error("undefined property")]
+    UndefinedProperty,
+
+    #[error("name already exists")]
+    NameConflict,
+
+    #[error("not found")]
+    NotFound,
+
+    #[error("wrong type id")]
+    WrongTypeId,
+
+    #[error(transparent)]
+    Get(#[from] GetError),
 }
 
 #[derive(Debug, thiserror::Error)]

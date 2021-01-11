@@ -212,6 +212,28 @@ async fn post_artifact_works() -> anyhow::Result<()> {
 
     Ok(())
 }
+#[async_std::test]
+async fn put_artifact_works() -> anyhow::Result<()> {
+    let file = existing_db();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    assert_eq!(store.get_artifacts(default()).await?.len(), 2);
+
+    let mut artifact = artifact0();
+    artifact.name = Some("foo".to_string());
+    artifact.state = ArtifactState::Live;
+    artifact
+        .properties
+        .insert("day".to_owned(), Value::Int(234));
+    artifact
+        .custom_properties
+        .insert("bar".to_string(), Value::Int(10));
+    store.put_artifact(&artifact).await?;
+
+    assert_eq!(store.get_artifacts(default()).await?.len(), 2);
+    assert_eq!(store.get_artifact(artifact.id).await?, Some(artifact));
+
+    Ok(())
+}
 
 #[async_std::test]
 async fn put_execution_type_works() {
