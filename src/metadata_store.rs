@@ -1,7 +1,11 @@
 use self::errors::{GetError, InitError, PostError, PutError};
-use self::options::{GetArtifactsOptions, PostArtifactOptions, PutTypeOptions};
+use self::options::{
+    GetArtifactsOptions, GetExecutionsOptions, PostArtifactOptions, PostExecutionOptions,
+    PutTypeOptions,
+};
 use crate::metadata::{
-    Artifact, ArtifactState, ArtifactType, ContextType, ExecutionType, Id, PropertyType, Value,
+    Artifact, ArtifactState, ArtifactType, ContextType, Execution, ExecutionState, ExecutionType,
+    Id, PropertyType, Value,
 };
 use crate::query::{self, Query, TypeKind};
 use futures::TryStreamExt as _;
@@ -145,7 +149,7 @@ impl MetadataStore {
         let mut connection = self.connection.begin().await?;
 
         if let Some(name) = &options.name {
-            let count: i32 = sqlx::query_scalar(self.query.check_artifac_name())
+            let count: i32 = sqlx::query_scalar(self.query.check_artifact_name())
                 .bind(type_id.get())
                 .bind(name)
                 .bind(-1) // dummy artifact id (TODO)
@@ -217,14 +221,14 @@ impl MetadataStore {
             .get_artifact(artifact.id)
             .await?
             .ok_or_else(|| PutError::NotFound)?;
-        if old.type_id != artifact.id {
+        if old.type_id != artifact.type_id {
             return Err(PutError::WrongTypeId);
         }
 
         let mut connection = self.connection.begin().await?;
 
         if let Some(name) = &artifact.name {
-            let count: i32 = sqlx::query_scalar(self.query.check_artifac_name())
+            let count: i32 = sqlx::query_scalar(self.query.check_artifact_name())
                 .bind(artifact.type_id.get())
                 .bind(name)
                 .bind(artifact.id.get())
@@ -341,6 +345,223 @@ impl MetadataStore {
         }
 
         Ok(artifacts.into_iter().map(|(_, v)| v).collect())
+    }
+
+    pub async fn post_execution(
+        &mut self,
+        type_id: Id,
+        options: PostExecutionOptions,
+    ) -> Result<Id, PostError> {
+        // TODO: optimize
+        let execution_type = self
+            .get_execution_types()
+            .await?
+            .into_iter()
+            .find(|a| a.id == type_id)
+            .ok_or_else(|| PostError::TypeNotFound)?;
+        for (name, value) in &options.properties {
+            if execution_type.properties.get(name).copied() != Some(value.ty()) {
+                return Err(PostError::UndefinedProperty);
+            }
+        }
+
+        let mut connection = self.connection.begin().await?;
+
+        if let Some(name) = &options.name {
+            let count: i32 = sqlx::query_scalar(self.query.check_execution_name())
+                .bind(type_id.get())
+                .bind(name)
+                .bind(-1) // dummy execution id (TODO)
+                .fetch_one(&mut connection)
+                .await?;
+            if count > 0 {
+                return Err(PostError::NameConflict);
+            }
+        }
+
+        let sql = self.query.insert_execution(&options);
+        let mut query = sqlx::query(&sql)
+            .bind(type_id.get())
+            .bind(options.last_known_state as i32)
+            .bind(options.create_time_since_epoch.as_millis() as i64)
+            .bind(options.last_update_time_since_epoch.as_millis() as i64);
+        if let Some(v) = &options.name {
+            query = query.bind(v);
+        }
+        query.execute(&mut connection).await?;
+
+        let execution_id: i32 = sqlx::query_scalar(self.query.get_last_execution_id())
+            .fetch_one(&mut connection)
+            .await?;
+
+        for (name, value, is_custom) in options
+            .properties
+            .iter()
+            .map(|(k, v)| (k, v, false))
+            .chain(options.custom_properties.iter().map(|(k, v)| (k, v, true)))
+        {
+            let sql = self.query.upsert_execution_property(value);
+            let mut query = sqlx::query(&sql)
+                .bind(execution_id)
+                .bind(name)
+                .bind(is_custom);
+            query = match value {
+                Value::Int(v) => query.bind(*v),
+                Value::Double(v) => query.bind(*v),
+                Value::String(v) => query.bind(v),
+            };
+            query.execute(&mut connection).await?;
+        }
+
+        connection.commit().await?;
+        Ok(Id::new(execution_id))
+    }
+
+    // TODO: remove redundant code
+    pub async fn put_execution(&mut self, execution: &Execution) -> Result<(), PutError> {
+        // TODO: optimize
+        let execution_type = self
+            .get_execution_types()
+            .await?
+            .into_iter()
+            .find(|a| a.id == execution.type_id)
+            .ok_or_else(|| PutError::TypeNotFound)?;
+        for (name, value) in &execution.properties {
+            if execution_type.properties.get(name).copied() != Some(value.ty()) {
+                return Err(PutError::UndefinedProperty);
+            }
+        }
+
+        // TODO: check if type id is unchanged
+        let old = self
+            .get_execution(execution.id)
+            .await?
+            .ok_or_else(|| PutError::NotFound)?;
+        if old.type_id != execution.type_id {
+            return Err(PutError::WrongTypeId);
+        }
+
+        let mut connection = self.connection.begin().await?;
+
+        if let Some(name) = &execution.name {
+            let count: i32 = sqlx::query_scalar(self.query.check_execution_name())
+                .bind(execution.type_id.get())
+                .bind(name)
+                .bind(execution.id.get())
+                .fetch_one(&mut connection)
+                .await?;
+            if count > 0 {
+                return Err(PutError::NameConflict);
+            }
+        }
+
+        let sql = self.query.update_execution(&execution);
+        let mut query = sqlx::query(&sql)
+            .bind(execution.last_known_state as i32)
+            .bind(execution.create_time_since_epoch.as_millis() as i64)
+            .bind(execution.last_update_time_since_epoch.as_millis() as i64);
+        if let Some(v) = &execution.name {
+            query = query.bind(v);
+        }
+        query
+            .bind(execution.id.get())
+            .execute(&mut connection)
+            .await?;
+
+        for (name, value, is_custom) in execution
+            .properties
+            .iter()
+            .map(|(k, v)| (k, v, false))
+            .chain(
+                execution
+                    .custom_properties
+                    .iter()
+                    .map(|(k, v)| (k, v, true)),
+            )
+        {
+            let sql = self.query.upsert_execution_property(value);
+            dbg!(&sql);
+            let mut query = sqlx::query(&sql)
+                .bind(execution.id.get())
+                .bind(name)
+                .bind(is_custom);
+            query = match value {
+                Value::Int(v) => query.bind(*v),
+                Value::Double(v) => query.bind(*v),
+                Value::String(v) => query.bind(v),
+            };
+            query.execute(&mut connection).await?;
+        }
+
+        connection.commit().await?;
+        Ok(())
+    }
+
+    pub async fn get_execution(&mut self, execution_id: Id) -> Result<Option<Execution>, GetError> {
+        let executions = self
+            .get_executions(GetExecutionsOptions::default().ids(&[execution_id]))
+            .await?;
+        Ok(executions.into_iter().nth(0))
+    }
+
+    pub async fn get_executions(
+        &mut self,
+        options: GetExecutionsOptions,
+    ) -> Result<Vec<Execution>, GetError> {
+        let sql = self.query.get_executions(&options);
+        let mut query = sqlx::query_as::<_, query::Execution>(&sql);
+        for v in options.values() {
+            match v {
+                query::QueryValue::Str(v) => {
+                    query = query.bind(v);
+                }
+                query::QueryValue::Int(v) => {
+                    query = query.bind(v);
+                }
+            }
+        }
+
+        let mut executions = BTreeMap::new();
+        let mut rows = query.fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            executions.insert(
+                row.id,
+                Execution {
+                    id: Id::new(row.id),
+                    type_id: Id::new(row.type_id),
+                    name: row.name,
+                    properties: BTreeMap::new(),
+                    custom_properties: BTreeMap::new(),
+                    last_known_state: ExecutionState::from_i32(row.last_known_state)?,
+                    create_time_since_epoch: Duration::from_millis(
+                        row.create_time_since_epoch as u64,
+                    ),
+                    last_update_time_since_epoch: Duration::from_millis(
+                        row.last_update_time_since_epoch as u64,
+                    ),
+                },
+            );
+        }
+        std::mem::drop(rows);
+
+        let sql = self.query.get_execution_properties(executions.len());
+        let mut query = sqlx::query_as::<_, query::ExecutionProperty>(&sql);
+        for id in executions.keys() {
+            query = query.bind(*id);
+        }
+        let mut rows = query.fetch(&mut self.connection);
+        while let Some(row) = rows.try_next().await? {
+            let execution = executions.get_mut(&row.execution_id).expect("bug");
+            let is_custom_property = row.is_custom_property;
+            let (name, value) = row.into_name_and_vaue()?;
+            if is_custom_property {
+                execution.custom_properties.insert(name, value);
+            } else {
+                execution.properties.insert(name, value);
+            }
+        }
+
+        Ok(executions.into_iter().map(|(_, v)| v).collect())
     }
 
     async fn initialize_database(&mut self) -> Result<(), InitError> {

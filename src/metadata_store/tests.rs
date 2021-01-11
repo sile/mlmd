@@ -212,6 +212,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
 
     Ok(())
 }
+
 #[async_std::test]
 async fn put_artifact_works() -> anyhow::Result<()> {
     let file = existing_db();
@@ -231,6 +232,106 @@ async fn put_artifact_works() -> anyhow::Result<()> {
 
     assert_eq!(store.get_artifacts(default()).await?.len(), 2);
     assert_eq!(store.get_artifact(artifact.id).await?, Some(artifact));
+
+    Ok(())
+}
+
+#[async_std::test]
+async fn get_executions_works() -> anyhow::Result<()> {
+    let file = existing_db();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+
+    let options = GetExecutionsOptions::default();
+
+    // All.
+    let executions = store.get_executions(options.clone()).await?;
+    assert_eq!(executions, vec![execution0()]);
+
+    // By type name.
+    let executions = store
+        .get_executions(options.clone().ty("Trainer"))
+        .await
+        .unwrap();
+    assert_eq!(executions, vec![execution0()]);
+
+    let executions = store
+        .get_executions(options.clone().ty("foo"))
+        .await
+        .unwrap();
+    assert_eq!(executions, vec![]);
+
+    // By ID.
+    let unregistered_id = Id::new(100);
+    let executions = store
+        .get_executions(options.clone().ids(&[Id::new(1), unregistered_id]))
+        .await
+        .unwrap();
+    assert_eq!(executions, vec![execution0()]);
+
+    // By Context.
+    let executions = store
+        .get_executions(options.clone().context(Id::new(1)))
+        .await
+        .unwrap();
+    assert_eq!(executions, vec![execution0()]);
+
+    Ok(())
+}
+
+#[async_std::test]
+async fn put_execution_works() -> anyhow::Result<()> {
+    let file = existing_db();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    assert_eq!(store.get_executions(default()).await?.len(), 1);
+
+    let mut execution = execution0();
+    execution.name = Some("foo".to_string());
+    execution.last_known_state = ExecutionState::Running;
+    execution
+        .custom_properties
+        .insert("bar".to_string(), Value::Int(10));
+    store.put_execution(&execution).await?;
+
+    assert_eq!(store.get_executions(default()).await?.len(), 1);
+    assert_eq!(store.get_execution(execution.id).await?, Some(execution));
+
+    Ok(())
+}
+
+#[async_std::test]
+async fn post_execution_works() -> anyhow::Result<()> {
+    let file = NamedTempFile::new().unwrap();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+
+    assert!(store.get_executions(default()).await?.is_empty());
+
+    let type_id = store
+        .put_execution_type(
+            "DataSet",
+            PutTypeOptions::default()
+                .property_int("day")
+                .property_string("split"),
+        )
+        .await?;
+
+    // Simple execution.
+    let execution_id = store.post_execution(type_id, default()).await?;
+
+    let executions = store.get_executions(default()).await?;
+    assert_eq!(executions.len(), 1);
+    assert_eq!(executions[0].id, execution_id);
+
+    // Name confilict.
+    store
+        .post_execution(type_id, PostExecutionOptions::default().name("foo"))
+        .await?;
+    assert!(matches!(
+        store
+            .post_execution(type_id, PostExecutionOptions::default().name("foo"))
+            .await
+            .err(),
+        Some(PostError::NameConflict)
+    ));
 
     Ok(())
 }
@@ -495,4 +596,17 @@ fn artifact1() -> Artifact {
 
 fn default<T: Default>() -> T {
     T::default()
+}
+
+fn execution0() -> Execution {
+    Execution {
+        id: Id::new(1),
+        type_id: Id::new(3),
+        name: None,
+        last_known_state: ExecutionState::Complete,
+        properties: BTreeMap::new(),
+        custom_properties: BTreeMap::new(),
+        create_time_since_epoch: Duration::from_millis(1609134222505),
+        last_update_time_since_epoch: Duration::from_millis(1609134224027),
+    }
 }

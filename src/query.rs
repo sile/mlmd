@@ -1,6 +1,8 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
 use crate::metadata::{self, ConvertError, Value};
-use crate::metadata_store::options::{GetArtifactsOptions, PostArtifactOptions};
+use crate::metadata_store::options::{
+    GetArtifactsOptions, GetExecutionsOptions, PostArtifactOptions, PostExecutionOptions,
+};
 
 #[derive(Debug, Clone)]
 pub enum Query {
@@ -56,7 +58,7 @@ impl Query {
         "INSERT INTO TypeProperty (type_id, name, data_type) VALUES ($1, $2, $3)"
     }
 
-    pub fn check_artifac_name(&self) -> &'static str {
+    pub fn check_artifact_name(&self) -> &'static str {
         "SELECT count(*) FROM Artifact WHERE type_id=? AND name=? AND id != ?"
     }
 
@@ -166,6 +168,109 @@ impl Query {
         }
 
         query
+    }
+
+    pub fn get_executions(&self, options: &GetExecutionsOptions) -> String {
+        let mut query = concat!(
+            "SELECT ",
+            "A.id, A.name, A.type_id, A.last_known_state, A.create_time_since_epoch, A.last_update_time_since_epoch ",
+            "FROM Execution as A ",
+        ).to_owned();
+
+        if options.type_name.is_some() {
+            query += "JOIN Type as T ON A.type_id = T.id ";
+        };
+        if options.context_id.is_some() {
+            query += "JOIN Association as C ON A.id = C.execution_id ";
+        }
+
+        let mut i = 1;
+        let mut conditions = Vec::new();
+        if options.type_name.is_some() {
+            conditions.push(format!("T.name = ${}", i));
+            i += 1;
+        }
+        if options.execution_name.is_some() {
+            conditions.push(format!("A.name = ${}", i));
+            i += 1;
+        }
+        if !options.execution_ids.is_empty() {
+            conditions.push(format!(
+                "A.id IN (${})",
+                (0..options.execution_ids.len())
+                    .map(|n| (i + n).to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+            i += options.execution_ids.len();
+        }
+        if options.context_id.is_some() {
+            conditions.push(format!("C.context_id = ${}", i));
+        }
+
+        if !conditions.is_empty() {
+            query += &format!("WHERE {}", conditions.join(" AND "));
+        }
+
+        query
+    }
+
+    pub fn get_execution_properties(&self, n_ids: usize) -> String {
+        format!(
+            concat!(
+                "SELECT execution_id, name, is_custom_property, int_value, double_value, string_value ",
+                "FROM ExecutionProperty ",
+                "WHERE execution_id IN ({})"
+            ),
+            (1..=n_ids)
+                .map(|n| format!("${}", n))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
+
+    pub fn insert_execution(&self, options: &PostExecutionOptions) -> String {
+        // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
+        // we can use a static INSERT statement without regarding `options`.
+        let mut fields =
+            "type_id, last_known_state, create_time_since_epoch, last_update_time_since_epoch"
+                .to_owned();
+        let mut values = "?, ?, ?, ?".to_owned();
+
+        if options.name.is_some() {
+            fields += ", name";
+            values += ", ?";
+        }
+
+        format!("INSERT INTO Execution ({}) VALUES ({})", fields, values)
+    }
+
+    pub fn update_execution(&self, execution: &metadata::Execution) -> String {
+        // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
+        // we can use a static UPDATE statement.
+        let mut fields =
+            "last_known_state=?, create_time_since_epoch=?, last_update_time_since_epoch=?"
+                .to_owned();
+        if execution.name.is_some() {
+            fields += ", name=?";
+        }
+
+        format!("UPDATE Execution SET {} WHERE id=?", fields)
+    }
+
+    pub fn upsert_execution_property(&self, value: &Value) -> String {
+        match self {
+            Self::Sqlite(x) => x.upsert_execution_property(value),
+            Self::Mysql(x) => x.upsert_execution_property(value),
+        }
+    }
+
+    pub fn get_last_execution_id(&self) -> &'static str {
+        "SELECT id FROM Execution ORDER BY id DESC LIMIT 1"
+    }
+
+    pub fn check_execution_name(&self) -> &'static str {
+        "SELECT count(*) FROM Execution WHERE type_id=? AND name=? AND id != ?"
     }
 }
 
@@ -373,6 +478,21 @@ impl SqliteQuery {
             maybe_null(value.as_string().is_some(), "$4")
         )
     }
+
+    fn upsert_execution_property(&self, value: &Value) -> String {
+        format!(
+            concat!(
+                "INSERT INTO ExecutionProperty ",
+                "(execution_id, name, is_custom_property, int_value, double_value, string_value) ",
+                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "ON CONFLICT (execution_id, name, is_custom_property) ",
+                "DO UPDATE SET int_value={0}, double_value={1}, string_value={2}"
+            ),
+            maybe_null(value.as_int().is_some(), "$4"),
+            maybe_null(value.as_double().is_some(), "$4"),
+            maybe_null(value.as_string().is_some(), "$4")
+        )
+    }
 }
 
 fn maybe_null(b: bool, s: &str) -> &str {
@@ -573,6 +693,21 @@ impl MysqlQuery {
             maybe_null(value.as_string().is_some(), "$4")
         )
     }
+
+    fn upsert_execution_property(&self, value: &Value) -> String {
+        format!(
+            concat!(
+                "INSERT INTO ExecutionProperty ",
+                "(execution_id, name, is_custom_property, int_value, double_value, string_value) ",
+                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "ON DUPLICATE KEY ",
+                "UPDATE int_value={0}, double_value={1}, string_value={2}"
+            ),
+            maybe_null(value.as_int().is_some(), "$4"),
+            maybe_null(value.as_double().is_some(), "$4"),
+            maybe_null(value.as_string().is_some(), "$4")
+        )
+    }
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -633,6 +768,55 @@ pub struct ArtifactProperty {
 }
 
 impl ArtifactProperty {
+    pub fn into_name_and_vaue(self) -> Result<(String, Value), ConvertError> {
+        match self {
+            Self {
+                name,
+                int_value: Some(v),
+                double_value: None,
+                string_value: None,
+                ..
+            } => Ok((name, Value::Int(v))),
+            Self {
+                name,
+                int_value: None,
+                double_value: Some(v),
+                string_value: None,
+                ..
+            } => Ok((name, Value::Double(v))),
+            Self {
+                name,
+                int_value: None,
+                double_value: None,
+                string_value: Some(v),
+                ..
+            } => Ok((name, Value::String(v))),
+            _ => Err(ConvertError::WrongPropertyValue),
+        }
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct Execution {
+    pub id: i32,
+    pub type_id: i32,
+    pub name: Option<String>,
+    pub last_known_state: i32,
+    pub create_time_since_epoch: i64,
+    pub last_update_time_since_epoch: i64,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct ExecutionProperty {
+    pub execution_id: i32,
+    pub name: String,
+    pub is_custom_property: bool,
+    pub int_value: Option<i32>,
+    pub double_value: Option<f64>,
+    pub string_value: Option<String>,
+}
+
+impl ExecutionProperty {
     pub fn into_name_and_vaue(self) -> Result<(String, Value), ConvertError> {
         match self {
             Self {
