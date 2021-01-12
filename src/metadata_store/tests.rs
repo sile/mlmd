@@ -1,5 +1,7 @@
 use super::*;
-use crate::metadata::{ArtifactState, ArtifactType, ContextType, ExecutionType, Value};
+use crate::metadata::{
+    ArtifactState, ArtifactType, ContextType, ExecutionState, ExecutionType, Value,
+};
 use tempfile::NamedTempFile;
 
 #[async_std::test]
@@ -117,45 +119,41 @@ async fn get_artifact_types_works() -> anyhow::Result<()> {
 }
 
 #[async_std::test]
-async fn get_artifacts_works() {
+async fn get_artifacts_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
-
-    let options = GetArtifactsOptions::default();
+    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
     // All.
-    let artifacts = store.get_artifacts(options.clone()).await.unwrap();
+    let artifacts = store.get_artifacts().execute().await?;
     assert_eq!(artifacts, vec![artifact0(), artifact1()]);
 
     // By type name.
-    let artifacts = store
-        .get_artifacts(options.clone().ty("DataSet"))
-        .await
-        .unwrap();
+    let artifacts = store.get_artifacts().ty("DataSet").execute().await?;
     assert_eq!(artifacts, vec![artifact0()]);
 
     // By ID.
     let unregistered_id = Id::new(100);
     let artifacts = store
-        .get_artifacts(options.clone().ids(&[Id::new(2), unregistered_id]))
-        .await
-        .unwrap();
+        .get_artifacts()
+        .ids(&[Id::new(2), unregistered_id])
+        .execute()
+        .await?;
     assert_eq!(artifacts[0].id, Id::new(2));
     assert_eq!(artifacts, vec![artifact1()]);
 
     // By URI.
     let artifacts = store
-        .get_artifacts(options.clone().uri("path/to/model/file"))
-        .await
-        .unwrap();
+        .get_artifacts()
+        .uri("path/to/model/file")
+        .execute()
+        .await?;
     assert_eq!(artifacts, vec![artifact1()]);
 
     // By Context.
-    let artifacts = store
-        .get_artifacts(options.clone().context(Id::new(1)))
-        .await
-        .unwrap();
+    let artifacts = store.get_artifacts().context(Id::new(1)).execute().await?;
     assert_eq!(artifacts, vec![artifact1()]);
+
+    Ok(())
 }
 
 #[async_std::test]
@@ -163,7 +161,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    assert!(store.get_artifacts(default()).await?.is_empty());
+    assert!(store.get_artifacts().execute().await?.is_empty());
 
     let type_id = store
         .put_artifact_type("DataSet")
@@ -175,7 +173,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
     // Simple artifact.
     let artifact_id = store.post_artifact(type_id, default()).await?;
 
-    let artifacts = store.get_artifacts(default()).await?;
+    let artifacts = store.get_artifacts().execute().await?;
     assert_eq!(artifacts.len(), 1);
     assert_eq!(artifacts[0].id, artifact_id);
 
@@ -191,7 +189,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
                 .last_update_time_since_epoch(expected.last_update_time_since_epoch),
         )
         .await?;
-    let artifacts = store.get_artifacts(default()).await?;
+    let artifacts = store.get_artifacts().execute().await?;
     assert_eq!(artifacts.len(), 2);
     assert_eq!(artifacts[1], expected);
 
@@ -214,7 +212,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
 async fn put_artifact_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
-    assert_eq!(store.get_artifacts(default()).await?.len(), 2);
+    assert_eq!(store.get_artifacts().execute().await?.len(), 2);
 
     let mut artifact = artifact0();
     artifact.name = Some("foo".to_string());
@@ -227,8 +225,11 @@ async fn put_artifact_works() -> anyhow::Result<()> {
         .insert("bar".to_string(), Value::Int(10));
     store.put_artifact(&artifact).await?;
 
-    assert_eq!(store.get_artifacts(default()).await?.len(), 2);
-    assert_eq!(store.get_artifact(artifact.id).await?, Some(artifact));
+    assert_eq!(store.get_artifacts().execute().await?.len(), 2);
+    assert_eq!(
+        store.get_artifacts().id(artifact.id).execute().await?,
+        vec![artifact]
+    );
 
     Ok(())
 }
@@ -238,38 +239,28 @@ async fn get_executions_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let options = GetExecutionsOptions::default();
-
     // All.
-    let executions = store.get_executions(options.clone()).await?;
+    let executions = store.get_executions().execute().await?;
     assert_eq!(executions, vec![execution0()]);
 
     // By type name.
-    let executions = store
-        .get_executions(options.clone().ty("Trainer"))
-        .await
-        .unwrap();
+    let executions = store.get_executions().ty("Trainer").execute().await?;
     assert_eq!(executions, vec![execution0()]);
 
-    let executions = store
-        .get_executions(options.clone().ty("foo"))
-        .await
-        .unwrap();
+    let executions = store.get_executions().ty("foo").execute().await?;
     assert_eq!(executions, vec![]);
 
     // By ID.
     let unregistered_id = Id::new(100);
     let executions = store
-        .get_executions(options.clone().ids(&[Id::new(1), unregistered_id]))
-        .await
-        .unwrap();
+        .get_executions()
+        .ids(&[Id::new(1), unregistered_id])
+        .execute()
+        .await?;
     assert_eq!(executions, vec![execution0()]);
 
     // By Context.
-    let executions = store
-        .get_executions(options.clone().context(Id::new(1)))
-        .await
-        .unwrap();
+    let executions = store.get_executions().context(Id::new(1)).execute().await?;
     assert_eq!(executions, vec![execution0()]);
 
     Ok(())
@@ -279,7 +270,7 @@ async fn get_executions_works() -> anyhow::Result<()> {
 async fn put_execution_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
-    assert_eq!(store.get_executions(default()).await?.len(), 1);
+    assert_eq!(store.get_executions().execute().await?.len(), 1);
 
     let mut execution = execution0();
     execution.name = Some("foo".to_string());
@@ -289,8 +280,11 @@ async fn put_execution_works() -> anyhow::Result<()> {
         .insert("bar".to_string(), Value::Int(10));
     store.put_execution(&execution).await?;
 
-    assert_eq!(store.get_executions(default()).await?.len(), 1);
-    assert_eq!(store.get_execution(execution.id).await?, Some(execution));
+    assert_eq!(store.get_executions().execute().await?.len(), 1);
+    assert_eq!(
+        store.get_executions().id(execution.id).execute().await?,
+        vec![execution]
+    );
 
     Ok(())
 }
@@ -300,7 +294,7 @@ async fn post_execution_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    assert!(store.get_executions(default()).await?.is_empty());
+    assert!(store.get_executions().execute().await?.is_empty());
 
     let type_id = store
         .put_execution_type("DataSet")
@@ -312,7 +306,7 @@ async fn post_execution_works() -> anyhow::Result<()> {
     // Simple execution.
     let execution_id = store.post_execution(type_id, default()).await?;
 
-    let executions = store.get_executions(default()).await?;
+    let executions = store.get_executions().execute().await?;
     assert_eq!(executions.len(), 1);
     assert_eq!(executions[0].id, execution_id);
 
@@ -438,48 +432,39 @@ async fn get_contexts_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let options = GetContextsOptions::default();
-
     // All.
-    let contexts = store.get_contexts(options.clone()).await?;
+    let contexts = store.get_contexts().execute().await?;
     assert_eq!(contexts, vec![context0()]);
 
     // By type name.
-    let contexts = store
-        .get_contexts(options.clone().ty("Experiment"))
-        .await
-        .unwrap();
+    let contexts = store.get_contexts().ty("Experiment").execute().await?;
     assert_eq!(contexts, vec![context0()]);
 
-    let contexts = store.get_contexts(options.clone().ty("foo")).await.unwrap();
+    let contexts = store.get_contexts().ty("foo").execute().await?;
     assert_eq!(contexts, vec![]);
 
     let contexts = store
-        .get_contexts(options.clone().type_and_name("Experiment", "exp.27823"))
-        .await
-        .unwrap();
+        .get_contexts()
+        .type_and_name("Experiment", "exp.27823")
+        .execute()
+        .await?;
     assert_eq!(contexts, vec![context0()]);
 
     // By ID.
     let unregistered_id = Id::new(100);
     let contexts = store
-        .get_contexts(options.clone().ids(&[Id::new(1), unregistered_id]))
-        .await
-        .unwrap();
+        .get_contexts()
+        .ids(&[Id::new(1), unregistered_id])
+        .execute()
+        .await?;
     assert_eq!(contexts, vec![context0()]);
 
     // By artifact.
-    let contexts = store
-        .get_contexts(options.clone().artifact(Id::new(2)))
-        .await
-        .unwrap();
+    let contexts = store.get_contexts().artifact(Id::new(2)).execute().await?;
     assert_eq!(contexts, vec![context0()]);
 
     // By execution.
-    let contexts = store
-        .get_contexts(options.clone().execution(Id::new(1)))
-        .await
-        .unwrap();
+    let contexts = store.get_contexts().execution(Id::new(1)).execute().await?;
     assert_eq!(contexts, vec![context0()]);
 
     Ok(())
@@ -489,7 +474,7 @@ async fn get_contexts_works() -> anyhow::Result<()> {
 async fn put_context_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
-    assert_eq!(store.get_contexts(default()).await?.len(), 1);
+    assert_eq!(store.get_contexts().execute().await?.len(), 1);
 
     let mut context = context0();
     context.name = "foo".to_string();
@@ -498,8 +483,11 @@ async fn put_context_works() -> anyhow::Result<()> {
         .insert("bar".to_string(), Value::Int(10));
     store.put_context(&context).await?;
 
-    assert_eq!(store.get_contexts(default()).await?.len(), 1);
-    assert_eq!(store.get_context(context.id).await?, Some(context));
+    assert_eq!(store.get_contexts().execute().await?.len(), 1);
+    assert_eq!(
+        store.get_contexts().id(context.id).execute().await?,
+        vec![context]
+    );
 
     Ok(())
 }
@@ -509,14 +497,14 @@ async fn post_context_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    assert!(store.get_contexts(default()).await?.is_empty());
+    assert!(store.get_contexts().execute().await?.is_empty());
 
     let type_id = store.put_context_type("Context").execute().await?;
 
     // Simple context.
     let context_id = store.post_context(type_id, "bar", default()).await?;
 
-    let contexts = store.get_contexts(default()).await?;
+    let contexts = store.get_contexts().execute().await?;
     assert_eq!(contexts.len(), 1);
     assert_eq!(contexts[0].id, context_id);
 
@@ -646,15 +634,11 @@ async fn put_attribution_works() -> anyhow::Result<()> {
     let c1 = store.post_context(t1, "bar", default()).await?;
 
     store.put_attribution(c1, a0).await?;
-    let contexts = store
-        .get_contexts(GetContextsOptions::default().artifact(a0))
-        .await?;
+    let contexts = store.get_contexts().artifact(a0).execute().await?;
     assert_eq!(contexts.len(), 1);
     assert_eq!(contexts[0].id, c1);
 
-    let artifacts = store
-        .get_artifacts(GetArtifactsOptions::default().context(c1))
-        .await?;
+    let artifacts = store.get_artifacts().context(c1).execute().await?;
     assert_eq!(artifacts.len(), 1);
     assert_eq!(artifacts[0].id, a0);
 
@@ -675,15 +659,11 @@ async fn put_association_works() -> anyhow::Result<()> {
     let c1 = store.post_context(t1, "bar", default()).await?;
 
     store.put_association(c1, e0).await?;
-    let contexts = store
-        .get_contexts(GetContextsOptions::default().execution(e0))
-        .await?;
+    let contexts = store.get_contexts().execution(e0).execute().await?;
     assert_eq!(contexts.len(), 1);
     assert_eq!(contexts[0].id, c1);
 
-    let executions = store
-        .get_executions(GetExecutionsOptions::default().context(c1))
-        .await?;
+    let executions = store.get_executions().context(c1).execute().await?;
     assert_eq!(executions.len(), 1);
     assert_eq!(executions[0].id, e0);
 

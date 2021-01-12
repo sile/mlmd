@@ -221,6 +221,35 @@ pub struct Execution {
     pub last_update_time_since_epoch: Duration,
 }
 
+impl crate::query::InsertProperty for Execution {
+    fn insert_property(&mut self, is_custom: bool, name: String, value: Value) {
+        if is_custom {
+            self.custom_properties.insert(name, value);
+        } else {
+            self.properties.insert(name, value);
+        }
+    }
+}
+
+impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Execution {
+    fn from_row(row: &'a sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: Id::new(row.try_get("id")?),
+            type_id: Id::new(row.try_get("type_id")?),
+            name: row.try_get("name")?,
+            properties: BTreeMap::new(),
+            custom_properties: BTreeMap::new(),
+            last_known_state: ExecutionState::from_i32(row.try_get("last_known_state")?)?,
+            create_time_since_epoch: Duration::from_millis(
+                row.try_get::<i64, _>("create_time_since_epoch")? as u64,
+            ),
+            last_update_time_since_epoch: Duration::from_millis(
+                row.try_get::<i64, _>("last_update_time_since_epoch")? as u64,
+            ),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExecutionState {
     Unknown = 0,
@@ -233,7 +262,7 @@ pub enum ExecutionState {
 }
 
 impl ExecutionState {
-    pub fn from_i32(v: i32) -> Result<Self, ConvertError> {
+    pub fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
         match v {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::New),
@@ -242,7 +271,9 @@ impl ExecutionState {
             4 => Ok(Self::Failed),
             5 => Ok(Self::Cached),
             6 => Ok(Self::Canceled),
-            _ => Err(ConvertError::UndefinedExecutionState { value: v }),
+            _ => Err(sqlx::Error::Decode(
+                anyhow::anyhow!("execution state {} is undefined", v).into(),
+            )),
         }
     }
 }
@@ -256,6 +287,34 @@ pub struct Context {
     pub custom_properties: BTreeMap<String, Value>,
     pub create_time_since_epoch: Duration,
     pub last_update_time_since_epoch: Duration,
+}
+
+impl crate::query::InsertProperty for Context {
+    fn insert_property(&mut self, is_custom: bool, name: String, value: Value) {
+        if is_custom {
+            self.custom_properties.insert(name, value);
+        } else {
+            self.properties.insert(name, value);
+        }
+    }
+}
+
+impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Context {
+    fn from_row(row: &'a sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: Id::new(row.try_get("id")?),
+            type_id: Id::new(row.try_get("type_id")?),
+            name: row.try_get("name")?,
+            properties: BTreeMap::new(),
+            custom_properties: BTreeMap::new(),
+            create_time_since_epoch: Duration::from_millis(
+                row.try_get::<i64, _>("create_time_since_epoch")? as u64,
+            ),
+            last_update_time_since_epoch: Duration::from_millis(
+                row.try_get::<i64, _>("last_update_time_since_epoch")? as u64,
+            ),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

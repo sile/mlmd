@@ -1,12 +1,10 @@
 use self::errors::{GetError, InitError, PostError, PutError, PutTypeError};
 use self::options::{
-    GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
-    GetTypesOptions, PostArtifactOptions, PostContextOptions, PostExecutionOptions,
-    PutEventOptions, PutTypeOptions,
+    GetEventsOptions, GetTypesOptions, PostArtifactOptions, PostContextOptions,
+    PostExecutionOptions, PutEventOptions, PutTypeOptions,
 };
 use crate::metadata::{
-    Artifact, Context, Event, EventStep, EventType, Execution, ExecutionState, Id, PropertyType,
-    Value,
+    Artifact, Context, Event, EventStep, EventType, Execution, Id, PropertyType, Value,
 };
 use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query, TypeKind};
 use crate::requests;
@@ -26,7 +24,7 @@ const SCHEMA_VERSION: i32 = 6;
 #[derive(Debug)]
 pub struct MetadataStore {
     connection: sqlx::AnyConnection,
-    query: Query,
+    pub(crate) query: Query, // TODO
 }
 
 impl MetadataStore {
@@ -72,7 +70,7 @@ impl MetadataStore {
 
     pub async fn post_artifact(
         &mut self,
-        type_id: Id,
+        type_id: Id, // TODO: name(?)
         options: PostArtifactOptions,
     ) -> Result<Id, PostError> {
         let artifact_type = self
@@ -144,6 +142,10 @@ impl MetadataStore {
         Ok(Id::new(artifact_id))
     }
 
+    pub fn get_artifacts(&mut self) -> requests::GetArtifactsRequest {
+        requests::GetArtifactsRequest::new(self)
+    }
+
     // TODO: remove redundant code
     pub async fn put_artifact(&mut self, artifact: &Artifact) -> Result<(), PutError> {
         let artifact_type = self
@@ -162,8 +164,12 @@ impl MetadataStore {
 
         // TODO: check if type id is unchanged
         let old = self
-            .get_artifact(artifact.id)
+            .get_artifacts()
+            .id(artifact.id)
+            .execute()
             .await?
+            .into_iter()
+            .nth(0)
             .ok_or_else(|| PutError::NotFound)?;
         if old.type_id != artifact.type_id {
             return Err(PutError::WrongTypeId);
@@ -223,14 +229,6 @@ impl MetadataStore {
         Ok(())
     }
 
-    // TODO: delete
-    pub async fn get_artifact(&mut self, artifact_id: Id) -> Result<Option<Artifact>, GetError> {
-        let artifacts = self
-            .get_artifacts(GetArtifactsOptions::default().ids(&[artifact_id]))
-            .await?;
-        Ok(artifacts.into_iter().nth(0))
-    }
-
     pub(crate) async fn get_items<T>(&mut self, generator: T) -> Result<Vec<T::Item>, GetError>
     where
         T: GetItemsQueryGenerator,
@@ -270,17 +268,6 @@ impl MetadataStore {
         }
 
         Ok(items.into_iter().map(|(_, v)| v).collect())
-    }
-
-    pub async fn get_artifacts(
-        &mut self,
-        options: GetArtifactsOptions,
-    ) -> Result<Vec<Artifact>, GetError> {
-        let generator = query::GetArtifactsQueryGenerator {
-            query: self.query.clone(),
-            options,
-        };
-        self.get_items(generator).await
     }
 
     pub async fn post_execution(
@@ -372,8 +359,12 @@ impl MetadataStore {
 
         // TODO: check if type id is unchanged
         let old = self
-            .get_execution(execution.id)
+            .get_executions()
+            .id(execution.id)
+            .execute()
             .await?
+            .into_iter()
+            .nth(0)
             .ok_or_else(|| PutError::NotFound)?;
         if old.type_id != execution.type_id {
             return Err(PutError::WrongTypeId);
@@ -435,71 +426,8 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub async fn get_execution(&mut self, execution_id: Id) -> Result<Option<Execution>, GetError> {
-        let executions = self
-            .get_executions(GetExecutionsOptions::default().ids(&[execution_id]))
-            .await?;
-        Ok(executions.into_iter().nth(0))
-    }
-
-    pub async fn get_executions(
-        &mut self,
-        options: GetExecutionsOptions,
-    ) -> Result<Vec<Execution>, GetError> {
-        let sql = self.query.get_executions(&options);
-        let mut query = sqlx::query_as::<_, query::Execution>(&sql);
-        for v in options.values() {
-            match v {
-                query::QueryValue::Str(v) => {
-                    query = query.bind(v);
-                }
-                query::QueryValue::Int(v) => {
-                    query = query.bind(v);
-                }
-            }
-        }
-
-        let mut executions = BTreeMap::new();
-        let mut rows = query.fetch(&mut self.connection);
-        while let Some(row) = rows.try_next().await? {
-            executions.insert(
-                row.id,
-                Execution {
-                    id: Id::new(row.id),
-                    type_id: Id::new(row.type_id),
-                    name: row.name,
-                    properties: BTreeMap::new(),
-                    custom_properties: BTreeMap::new(),
-                    last_known_state: ExecutionState::from_i32(row.last_known_state)?,
-                    create_time_since_epoch: Duration::from_millis(
-                        row.create_time_since_epoch as u64,
-                    ),
-                    last_update_time_since_epoch: Duration::from_millis(
-                        row.last_update_time_since_epoch as u64,
-                    ),
-                },
-            );
-        }
-        std::mem::drop(rows);
-
-        let sql = self.query.get_execution_properties(executions.len());
-        let mut query = sqlx::query_as::<_, query::ExecutionProperty>(&sql);
-        for id in executions.keys() {
-            query = query.bind(*id);
-        }
-        let mut rows = query.fetch(&mut self.connection);
-        while let Some(row) = rows.try_next().await? {
-            let execution = executions.get_mut(&row.execution_id).expect("bug");
-            let is_custom_property = row.is_custom_property;
-            let (name, value) = row.into_name_and_vaue()?;
-            if is_custom_property {
-                execution.custom_properties.insert(name, value);
-            } else {
-                execution.properties.insert(name, value);
-            }
-        }
-
-        Ok(executions.into_iter().map(|(_, v)| v).collect())
+    pub fn get_executions(&mut self) -> requests::GetExecutionsRequest {
+        requests::GetExecutionsRequest::new(self)
     }
 
     pub async fn post_context(
@@ -588,8 +516,12 @@ impl MetadataStore {
 
         // TODO: check if type id is unchanged
         let old = self
-            .get_context(context.id)
+            .get_contexts()
+            .id(context.id)
+            .execute()
             .await?
+            .into_iter()
+            .nth(0)
             .ok_or_else(|| PutError::NotFound)?;
         if old.type_id != context.type_id {
             return Err(PutError::WrongTypeId);
@@ -640,70 +572,8 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub async fn get_context(&mut self, context_id: Id) -> Result<Option<Context>, GetError> {
-        let contexts = self
-            .get_contexts(GetContextsOptions::default().ids(&[context_id]))
-            .await?;
-        Ok(contexts.into_iter().nth(0))
-    }
-
-    pub async fn get_contexts(
-        &mut self,
-        options: GetContextsOptions,
-    ) -> Result<Vec<Context>, GetError> {
-        let sql = self.query.get_contexts(&options);
-        let mut query = sqlx::query_as::<_, query::Context>(&sql);
-        for v in options.values() {
-            match v {
-                query::QueryValue::Str(v) => {
-                    query = query.bind(v);
-                }
-                query::QueryValue::Int(v) => {
-                    query = query.bind(v);
-                }
-            }
-        }
-
-        let mut contexts = BTreeMap::new();
-        let mut rows = query.fetch(&mut self.connection);
-        while let Some(row) = rows.try_next().await? {
-            contexts.insert(
-                row.id,
-                Context {
-                    id: Id::new(row.id),
-                    type_id: Id::new(row.type_id),
-                    name: row.name,
-                    properties: BTreeMap::new(),
-                    custom_properties: BTreeMap::new(),
-                    create_time_since_epoch: Duration::from_millis(
-                        row.create_time_since_epoch as u64,
-                    ),
-                    last_update_time_since_epoch: Duration::from_millis(
-                        row.last_update_time_since_epoch as u64,
-                    ),
-                },
-            );
-        }
-        std::mem::drop(rows);
-
-        let sql = self.query.get_context_properties(contexts.len());
-        let mut query = sqlx::query_as::<_, query::ContextProperty>(&sql);
-        for id in contexts.keys() {
-            query = query.bind(*id);
-        }
-        let mut rows = query.fetch(&mut self.connection);
-        while let Some(row) = rows.try_next().await? {
-            let context = contexts.get_mut(&row.context_id).expect("bug");
-            let is_custom_property = row.is_custom_property;
-            let (name, value) = row.into_name_and_vaue()?;
-            if is_custom_property {
-                context.custom_properties.insert(name, value);
-            } else {
-                context.properties.insert(name, value);
-            }
-        }
-
-        Ok(contexts.into_iter().map(|(_, v)| v).collect())
+    pub fn get_contexts(&mut self) -> requests::GetContextsRequest {
+        requests::GetContextsRequest::new(self)
     }
 
     pub async fn put_attribution(

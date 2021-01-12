@@ -239,7 +239,7 @@ impl Query {
     pub fn get_execution_properties(&self, n_ids: usize) -> String {
         format!(
             concat!(
-                "SELECT execution_id, name, is_custom_property, int_value, double_value, string_value ",
+                "SELECT execution_id as id, name, is_custom_property, int_value, double_value, string_value ",
                 "FROM ExecutionProperty ",
                 "WHERE execution_id IN ({})"
             ),
@@ -345,7 +345,7 @@ impl Query {
     pub fn get_context_properties(&self, n_ids: usize) -> String {
         format!(
             concat!(
-                "SELECT context_id, name, is_custom_property, int_value, double_value, string_value ",
+                "SELECT context_id as id, name, is_custom_property, int_value, double_value, string_value ",
                 "FROM ContextProperty ",
                 "WHERE context_id IN ({})"
             ),
@@ -1202,6 +1202,50 @@ impl GetItemsQueryGenerator for GetArtifactsQueryGenerator {
 
     fn generate_select_properties_sql(&self, items: usize) -> String {
         self.query.get_artifact_properties(items)
+    }
+
+    fn query_values(&self) -> Vec<QueryValue> {
+        self.options.values()
+    }
+}
+
+#[derive(Debug)]
+pub struct GetExecutionsQueryGenerator {
+    pub query: Query,
+    pub options: GetExecutionsOptions,
+}
+
+impl GetItemsQueryGenerator for GetExecutionsQueryGenerator {
+    type Item = metadata::Execution;
+
+    fn generate_select_items_sql(&self) -> String {
+        self.query.get_executions(&self.options)
+    }
+
+    fn generate_select_properties_sql(&self, items: usize) -> String {
+        self.query.get_execution_properties(items)
+    }
+
+    fn query_values(&self) -> Vec<QueryValue> {
+        self.options.values()
+    }
+}
+
+#[derive(Debug)]
+pub struct GetContextsQueryGenerator {
+    pub query: Query,
+    pub options: GetContextsOptions,
+}
+
+impl GetItemsQueryGenerator for GetContextsQueryGenerator {
+    type Item = metadata::Context;
+
+    fn generate_select_items_sql(&self) -> String {
+        self.query.get_contexts(&self.options)
+    }
+
+    fn generate_select_properties_sql(&self, items: usize) -> String {
+        self.query.get_context_properties(items)
     }
 
     fn query_values(&self) -> Vec<QueryValue> {
