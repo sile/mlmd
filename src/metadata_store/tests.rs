@@ -171,7 +171,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
         .await?;
 
     // Simple artifact.
-    let artifact_id = store.post_artifact(type_id, default()).await?;
+    let artifact_id = store.post_artifact(type_id).execute().await?;
 
     let artifacts = store.get_artifacts().execute().await?;
     assert_eq!(artifacts.len(), 1);
@@ -180,26 +180,24 @@ async fn post_artifact_works() -> anyhow::Result<()> {
     // Complex artifact.
     let mut expected = artifact0();
     expected.id = store
-        .post_artifact(
-            type_id,
-            PostArtifactOptions::default()
-                .uri(expected.uri.as_ref().unwrap())
-                .properties(expected.properties.clone())
-                .create_time_since_epoch(expected.create_time_since_epoch)
-                .last_update_time_since_epoch(expected.last_update_time_since_epoch),
-        )
+        .post_artifact(type_id)
+        .uri(expected.uri.as_ref().unwrap())
+        .properties(expected.properties.clone())
+        .create_time_since_epoch(expected.create_time_since_epoch)
+        .last_update_time_since_epoch(expected.last_update_time_since_epoch)
+        .execute()
         .await?;
     let artifacts = store.get_artifacts().execute().await?;
     assert_eq!(artifacts.len(), 2);
     assert_eq!(artifacts[1], expected);
 
     // Name confilict.
-    store
-        .post_artifact(type_id, PostArtifactOptions::default().name("foo"))
-        .await?;
+    store.post_artifact(type_id).name("foo").execute().await?;
     assert!(matches!(
         store
-            .post_artifact(type_id, PostArtifactOptions::default().name("foo"))
+            .post_artifact(type_id)
+            .name("foo")
+            .execute()
             .await
             .err(),
         Some(PostError::NameConflict)
@@ -626,8 +624,8 @@ async fn put_attribution_works() -> anyhow::Result<()> {
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
     let t0 = store.put_artifact_type("t0").execute().await?;
-    let a0 = store.post_artifact(t0, default()).await?;
-    let _a1 = store.post_artifact(t0, default()).await?;
+    let a0 = store.post_artifact(t0).execute().await?;
+    let _a1 = store.post_artifact(t0).execute().await?;
 
     let t1 = store.put_context_type("t1").execute().await?;
     let _c0 = store.post_context(t1, "foo", default()).await?;
@@ -680,8 +678,8 @@ async fn put_event_works() -> anyhow::Result<()> {
     let e1 = store.post_execution(t0, default()).await?;
 
     let t1 = store.put_artifact_type("t1").execute().await?;
-    let a0 = store.post_artifact(t1, default()).await?;
-    let a1 = store.post_artifact(t1, default()).await?;
+    let a0 = store.post_artifact(t1).execute().await?;
+    let a1 = store.post_artifact(t1).execute().await?;
 
     store.put_event(EventType::Input, a0, e0, default()).await?;
     store

@@ -1,9 +1,11 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, ConvertError, EventStep, Value};
+use crate::metadata::{self, ConvertError, EventStep, Id, Value};
 use crate::metadata_store::options::{
-    GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
+    self, GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
     GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
 };
+use sqlx::database::HasArguments;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub enum Query {
@@ -88,8 +90,12 @@ impl Query {
         "INSERT INTO TypeProperty (type_id, name, data_type) VALUES ($1, $2, $3)"
     }
 
-    pub fn check_artifact_name(&self) -> &'static str {
-        "SELECT count(*) FROM Artifact WHERE type_id=? AND name=? AND id != ?"
+    pub fn check_artifact_name(&self, is_post: bool) -> &'static str {
+        if is_post {
+            "SELECT count(*) FROM Artifact WHERE type_id=? AND name=?"
+        } else {
+            "SELECT count(*) FROM Artifact WHERE type_id=? AND name=? AND id != ?"
+        }
     }
 
     pub fn insert_artifact(&self, options: &PostArtifactOptions) -> String {
@@ -967,18 +973,46 @@ impl TypeKind {
 #[derive(Debug)]
 pub enum QueryValue<'a> {
     Int(i32),
+    I64(i64),
     Str(&'a str),
 }
 
-#[derive(Debug, sqlx::FromRow)]
-pub struct Artifact {
-    pub id: i32,
-    pub type_id: i32,
-    pub name: Option<String>,
-    pub uri: Option<String>,
-    pub state: i32,
-    pub create_time_since_epoch: i64,
-    pub last_update_time_since_epoch: i64,
+impl<'a> QueryValue<'a> {
+    pub fn bind<'q, DB>(
+        self,
+        query: sqlx::query::Query<'q, DB, <DB as HasArguments<'q>>::Arguments>,
+    ) -> sqlx::query::Query<'q, DB, <DB as HasArguments<'q>>::Arguments>
+    where
+        'a: 'q,
+        DB: sqlx::Database,
+        i32: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        i64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        &'a str: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    {
+        match self {
+            Self::Int(v) => query.bind(v),
+            Self::I64(v) => query.bind(v),
+            Self::Str(v) => query.bind(v),
+        }
+    }
+
+    pub fn bind_scalar<'q, O, DB>(
+        self,
+        query: sqlx::query::QueryScalar<'q, DB, O, <DB as HasArguments<'q>>::Arguments>,
+    ) -> sqlx::query::QueryScalar<'q, DB, O, <DB as HasArguments<'q>>::Arguments>
+    where
+        'a: 'q,
+        DB: sqlx::Database,
+        i32: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        i64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+        &'a str: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
+    {
+        match self {
+            Self::Int(v) => query.bind(v),
+            Self::I64(v) => query.bind(v),
+            Self::Str(v) => query.bind(v),
+        }
+    }
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -1250,5 +1284,69 @@ impl GetItemsQueryGenerator for GetContextsQueryGenerator {
 
     fn query_values(&self) -> Vec<QueryValue> {
         self.options.values()
+    }
+}
+
+pub trait PostItemQueryGenerator {
+    const TYPE_KIND: TypeKind;
+
+    fn item_properties(&self) -> &BTreeMap<String, Value>;
+    fn item_custom_properties(&self) -> &BTreeMap<String, Value>;
+    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
+    fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>);
+    fn generate_last_item_id(&self) -> &'static str;
+    fn generate_upsert_item_property(&self, value: &Value) -> String;
+}
+
+#[derive(Debug)]
+pub struct PostArtifactQueryGenerator {
+    pub query: Query,
+    pub type_id: Id,
+    pub options: options::PostArtifactOptions,
+}
+
+impl PostItemQueryGenerator for PostArtifactQueryGenerator {
+    const TYPE_KIND: TypeKind = TypeKind::Artifact;
+
+    fn item_properties(&self) -> &BTreeMap<String, Value> {
+        &self.options.properties
+    }
+
+    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+        &self.options.custom_properties
+    }
+
+    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
+        if let Some(name) = &self.options.name {
+            let values = vec![QueryValue::Int(self.type_id.get()), QueryValue::Str(name)];
+            Some((self.query.check_artifact_name(true), values))
+        } else {
+            None
+        }
+    }
+
+    fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
+        let sql = self.query.insert_artifact(&self.options);
+        let mut values = vec![
+            QueryValue::Int(self.type_id.get()),
+            QueryValue::Int(self.options.state as i32),
+            QueryValue::I64(self.options.create_time_since_epoch.as_millis() as i64),
+            QueryValue::I64(self.options.last_update_time_since_epoch.as_millis() as i64),
+        ];
+        if let Some(v) = &self.options.name {
+            values.push(QueryValue::Str(v));
+        }
+        if let Some(v) = &self.options.uri {
+            values.push(QueryValue::Str(v));
+        }
+        (sql, values)
+    }
+
+    fn generate_last_item_id(&self) -> &'static str {
+        self.query.get_last_artifact_id()
+    }
+
+    fn generate_upsert_item_property(&self, value: &Value) -> String {
+        self.query.upsert_artifact_property(value)
     }
 }

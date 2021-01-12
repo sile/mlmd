@@ -41,59 +41,6 @@ impl Default for PostArtifactOptions {
     }
 }
 
-impl PostArtifactOptions {
-    pub fn name(mut self, name: &str) -> Self {
-        self.name = Some(name.to_owned());
-        self
-    }
-
-    pub fn uri(mut self, uri: &str) -> Self {
-        self.uri = Some(uri.to_owned());
-        self
-    }
-
-    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
-        self.properties = properties;
-        self
-    }
-
-    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
-        self.custom_properties = properties;
-        self
-    }
-
-    pub fn property<T>(mut self, key: &str, value: T) -> Self
-    where
-        T: Into<Value>,
-    {
-        self.properties.insert(key.to_owned(), value.into());
-        self
-    }
-
-    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
-    where
-        T: Into<Value>,
-    {
-        self.custom_properties.insert(key.to_owned(), value.into());
-        self
-    }
-
-    pub fn state(mut self, state: ArtifactState) -> Self {
-        self.state = state;
-        self
-    }
-
-    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
-        self.create_time_since_epoch = time;
-        self
-    }
-
-    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
-        self.last_update_time_since_epoch = time;
-        self
-    }
-}
-
 #[derive(Debug, Default, Clone)]
 pub struct GetArtifactsOptions {
     pub(crate) type_name: Option<String>,

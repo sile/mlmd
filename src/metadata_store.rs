@@ -1,7 +1,7 @@
 use self::errors::{GetError, InitError, PostError, PutError, PutTypeError};
 use self::options::{
-    GetEventsOptions, GetTypesOptions, PostArtifactOptions, PostContextOptions,
-    PostExecutionOptions, PutEventOptions, PutTypeOptions,
+    GetEventsOptions, GetTypesOptions, PostContextOptions, PostExecutionOptions, PutEventOptions,
+    PutTypeOptions,
 };
 use crate::metadata::{
     Artifact, Context, Event, EventStep, EventType, Execution, Id, PropertyType, Value,
@@ -68,32 +68,36 @@ impl MetadataStore {
         requests::GetContextTypesRequest::new(self)
     }
 
-    pub async fn post_artifact(
-        &mut self,
-        type_id: Id, // TODO: name(?)
-        options: PostArtifactOptions,
-    ) -> Result<Id, PostError> {
-        let artifact_type = self
-            .get_artifact_types()
-            .id(type_id)
-            .execute()
+    // TODO: s/type_id/type_name/
+    pub async fn post_item<T>(&mut self, type_id: Id, generator: T) -> Result<Id, PostError>
+    where
+        T: query::PostItemQueryGenerator,
+    {
+        let property_types = self
+            .get_types(
+                T::TYPE_KIND,
+                |_, _, properties| properties,
+                GetTypesOptions {
+                    name: None,
+                    ids: vec![type_id],
+                },
+            )
             .await?
             .into_iter()
             .nth(0)
             .ok_or_else(|| PostError::TypeNotFound)?;
-        for (name, value) in &options.properties {
-            if artifact_type.properties.get(name).copied() != Some(value.ty()) {
+        for (name, value) in generator.item_properties() {
+            if property_types.get(name).copied() != Some(value.ty()) {
                 return Err(PostError::UndefinedProperty);
             }
         }
 
         let mut connection = self.connection.begin().await?;
 
-        if let Some(name) = &options.name {
-            let count: i32 = sqlx::query_scalar(self.query.check_artifact_name())
-                .bind(type_id.get())
-                .bind(name)
-                .bind(-1) // dummy artifact id (TODO)
+        if let Some((sql, values)) = generator.generate_check_item_name_query() {
+            let count: i32 = values
+                .into_iter()
+                .fold(sqlx::query_scalar(&sql), |q, v| v.bind_scalar(q))
                 .fetch_one(&mut connection)
                 .await?;
             if count > 0 {
@@ -101,35 +105,30 @@ impl MetadataStore {
             }
         }
 
-        let sql = self.query.insert_artifact(&options);
-        let mut query = sqlx::query(&sql)
-            .bind(type_id.get())
-            .bind(options.state as i32)
-            .bind(options.create_time_since_epoch.as_millis() as i64)
-            .bind(options.last_update_time_since_epoch.as_millis() as i64);
-        if let Some(v) = &options.name {
-            query = query.bind(v);
-        }
-        if let Some(v) = &options.uri {
-            query = query.bind(v);
-        }
-        query.execute(&mut connection).await?;
+        let (sql, values) = generator.generate_insert_item_query();
+        values
+            .into_iter()
+            .fold(sqlx::query(&sql), |q, v| v.bind(q))
+            .execute(&mut connection)
+            .await?;
 
-        let artifact_id: i32 = sqlx::query_scalar(self.query.get_last_artifact_id())
+        let item_id: i32 = sqlx::query_scalar(generator.generate_last_item_id())
             .fetch_one(&mut connection)
             .await?;
 
-        for (name, value, is_custom) in options
-            .properties
+        let properties = generator
+            .item_properties()
             .iter()
             .map(|(k, v)| (k, v, false))
-            .chain(options.custom_properties.iter().map(|(k, v)| (k, v, true)))
-        {
-            let sql = self.query.upsert_artifact_property(value);
-            let mut query = sqlx::query(&sql)
-                .bind(artifact_id)
-                .bind(name)
-                .bind(is_custom);
+            .chain(
+                generator
+                    .item_custom_properties()
+                    .iter()
+                    .map(|(k, v)| (k, v, true)),
+            );
+        for (name, value, is_custom) in properties {
+            let sql = generator.generate_upsert_item_property(value);
+            let mut query = sqlx::query(&sql).bind(item_id).bind(name).bind(is_custom);
             query = match value {
                 Value::Int(v) => query.bind(*v),
                 Value::Double(v) => query.bind(*v),
@@ -139,7 +138,14 @@ impl MetadataStore {
         }
 
         connection.commit().await?;
-        Ok(Id::new(artifact_id))
+        Ok(Id::new(item_id))
+    }
+
+    pub fn post_artifact(
+        &mut self,
+        type_id: Id, // TODO: name(?)
+    ) -> requests::PostArtifactRequest {
+        requests::PostArtifactRequest::new(self, type_id)
     }
 
     pub fn get_artifacts(&mut self) -> requests::GetArtifactsRequest {
@@ -178,7 +184,7 @@ impl MetadataStore {
         let mut connection = self.connection.begin().await?;
 
         if let Some(name) = &artifact.name {
-            let count: i32 = sqlx::query_scalar(self.query.check_artifact_name())
+            let count: i32 = sqlx::query_scalar(self.query.check_artifact_name(false))
                 .bind(artifact.type_id.get())
                 .bind(name)
                 .bind(artifact.id.get())
@@ -212,7 +218,6 @@ impl MetadataStore {
             .chain(artifact.custom_properties.iter().map(|(k, v)| (k, v, true)))
         {
             let sql = self.query.upsert_artifact_property(value);
-            dbg!(&sql);
             let mut query = sqlx::query(&sql)
                 .bind(artifact.id.get())
                 .bind(name)
@@ -234,20 +239,12 @@ impl MetadataStore {
         T: GetItemsQueryGenerator,
     {
         let sql = generator.generate_select_items_sql();
-        let mut query = sqlx::query(&sql);
-        for v in generator.query_values() {
-            match v {
-                query::QueryValue::Str(v) => {
-                    query = query.bind(v);
-                }
-                query::QueryValue::Int(v) => {
-                    query = query.bind(v);
-                }
-            }
-        }
-
+        let mut rows = generator
+            .query_values()
+            .into_iter()
+            .fold(sqlx::query(&sql), |q, v| v.bind(q))
+            .fetch(&mut self.connection);
         let mut items = BTreeMap::new();
-        let mut rows = query.fetch(&mut self.connection);
         while let Some(row) = rows.try_next().await? {
             let id: i32 = row.try_get("id")?;
             items.insert(id, T::Item::from_row(&row)?);
@@ -409,7 +406,6 @@ impl MetadataStore {
             )
         {
             let sql = self.query.upsert_execution_property(value);
-            dbg!(&sql);
             let mut query = sqlx::query(&sql)
                 .bind(execution.id.get())
                 .bind(name)
@@ -555,7 +551,6 @@ impl MetadataStore {
             .chain(context.custom_properties.iter().map(|(k, v)| (k, v, true)))
         {
             let sql = self.query.upsert_context_property(value);
-            dbg!(&sql);
             let mut query = sqlx::query(&sql)
                 .bind(context.id.get())
                 .bind(name)

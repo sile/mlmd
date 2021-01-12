@@ -1,9 +1,11 @@
 use crate::metadata::{
-    Artifact, ArtifactType, Context, ContextType, Execution, ExecutionType, Id, PropertyType,
+    Artifact, ArtifactState, ArtifactType, Context, ContextType, Execution, ExecutionType, Id,
+    PropertyType, Value,
 };
 use crate::metadata_store::{errors, options, MetadataStore};
 use crate::query;
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct PutArtifactTypeRequest<'a> {
@@ -420,5 +422,84 @@ impl<'a> GetContextsRequest<'a> {
             options: self.options,
         };
         self.store.get_items(generator).await
+    }
+}
+
+#[derive(Debug)]
+pub struct PostArtifactRequest<'a> {
+    store: &'a mut MetadataStore,
+    type_id: Id,
+    options: options::PostArtifactOptions,
+}
+
+impl<'a> PostArtifactRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, type_id: Id) -> Self {
+        Self {
+            store,
+            type_id,
+            options: Default::default(),
+        }
+    }
+
+    pub fn name(mut self, name: &str) -> Self {
+        self.options.name = Some(name.to_owned());
+        self
+    }
+
+    pub fn uri(mut self, uri: &str) -> Self {
+        self.options.uri = Some(uri.to_owned());
+        self
+    }
+
+    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.options.properties = properties;
+        self
+    }
+
+    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.options.custom_properties = properties;
+        self
+    }
+
+    pub fn property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.options.properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.options
+            .custom_properties
+            .insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn state(mut self, state: ArtifactState) -> Self {
+        self.options.state = state;
+        self
+    }
+
+    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
+        self.options.create_time_since_epoch = time;
+        self
+    }
+
+    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
+        self.options.last_update_time_since_epoch = time;
+        self
+    }
+
+    pub async fn execute(self) -> Result<Id, errors::PostError> {
+        let generator = query::PostArtifactQueryGenerator {
+            query: self.store.query.clone(),
+            type_id: self.type_id,
+            options: self.options,
+        };
+        self.store.post_item(self.type_id, generator).await
     }
 }
