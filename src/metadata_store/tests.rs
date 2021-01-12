@@ -302,19 +302,19 @@ async fn post_execution_works() -> anyhow::Result<()> {
         .await?;
 
     // Simple execution.
-    let execution_id = store.post_execution(type_id, default()).await?;
+    let execution_id = store.post_execution(type_id).execute().await?;
 
     let executions = store.get_executions().execute().await?;
     assert_eq!(executions.len(), 1);
     assert_eq!(executions[0].id, execution_id);
 
     // Name confilict.
-    store
-        .post_execution(type_id, PostExecutionOptions::default().name("foo"))
-        .await?;
+    store.post_execution(type_id).name("foo").execute().await?;
     assert!(matches!(
         store
-            .post_execution(type_id, PostExecutionOptions::default().name("foo"))
+            .post_execution(type_id)
+            .name("foo")
+            .execute()
             .await
             .err(),
         Some(PostError::NameConflict)
@@ -500,16 +500,16 @@ async fn post_context_works() -> anyhow::Result<()> {
     let type_id = store.put_context_type("Context").execute().await?;
 
     // Simple context.
-    let context_id = store.post_context(type_id, "bar", default()).await?;
+    let context_id = store.post_context(type_id, "bar").execute().await?;
 
     let contexts = store.get_contexts().execute().await?;
     assert_eq!(contexts.len(), 1);
     assert_eq!(contexts[0].id, context_id);
 
     // Name confilict.
-    store.post_context(type_id, "foo", default()).await?;
+    store.post_context(type_id, "foo").execute().await?;
     assert!(matches!(
-        store.post_context(type_id, "foo", default()).await.err(),
+        store.post_context(type_id, "foo").execute().await.err(),
         Some(PostError::NameConflict)
     ));
 
@@ -628,8 +628,8 @@ async fn put_attribution_works() -> anyhow::Result<()> {
     let _a1 = store.post_artifact(t0).execute().await?;
 
     let t1 = store.put_context_type("t1").execute().await?;
-    let _c0 = store.post_context(t1, "foo", default()).await?;
-    let c1 = store.post_context(t1, "bar", default()).await?;
+    let _c0 = store.post_context(t1, "foo").execute().await?;
+    let c1 = store.post_context(t1, "bar").execute().await?;
 
     store.put_attribution(c1, a0).await?;
     let contexts = store.get_contexts().artifact(a0).execute().await?;
@@ -649,12 +649,12 @@ async fn put_association_works() -> anyhow::Result<()> {
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
     let t0 = store.put_execution_type("t0").execute().await?;
-    let e0 = store.post_execution(t0, default()).await?;
-    let _e1 = store.post_execution(t0, default()).await?;
+    let e0 = store.post_execution(t0).execute().await?;
+    let _e1 = store.post_execution(t0).execute().await?;
 
     let t1 = store.put_context_type("t1").execute().await?;
-    let _c0 = store.post_context(t1, "foo", default()).await?;
-    let c1 = store.post_context(t1, "bar", default()).await?;
+    let _c0 = store.post_context(t1, "foo").execute().await?;
+    let c1 = store.post_context(t1, "bar").execute().await?;
 
     store.put_association(c1, e0).await?;
     let contexts = store.get_contexts().execution(e0).execute().await?;
@@ -674,8 +674,8 @@ async fn put_event_works() -> anyhow::Result<()> {
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
 
     let t0 = store.put_execution_type("t0").execute().await?;
-    let e0 = store.post_execution(t0, default()).await?;
-    let e1 = store.post_execution(t0, default()).await?;
+    let e0 = store.post_execution(t0).execute().await?;
+    let e1 = store.post_execution(t0).execute().await?;
 
     let t1 = store.put_artifact_type("t1").execute().await?;
     let a0 = store.post_artifact(t1).execute().await?;

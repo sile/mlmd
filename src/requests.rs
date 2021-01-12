@@ -1,6 +1,6 @@
 use crate::metadata::{
-    Artifact, ArtifactState, ArtifactType, Context, ContextType, Execution, ExecutionType, Id,
-    PropertyType, Value,
+    Artifact, ArtifactState, ArtifactType, Context, ContextType, Execution, ExecutionState,
+    ExecutionType, Id, PropertyType, Value,
 };
 use crate::metadata_store::{errors, options, MetadataStore};
 use crate::query;
@@ -498,6 +498,147 @@ impl<'a> PostArtifactRequest<'a> {
         let generator = query::PostArtifactQueryGenerator {
             query: self.store.query.clone(),
             type_id: self.type_id,
+            options: self.options,
+        };
+        self.store.post_item(self.type_id, generator).await
+    }
+}
+
+#[derive(Debug)]
+pub struct PostExecutionRequest<'a> {
+    store: &'a mut MetadataStore,
+    type_id: Id,
+    options: options::PostExecutionOptions,
+}
+
+impl<'a> PostExecutionRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, type_id: Id) -> Self {
+        Self {
+            store,
+            type_id,
+            options: Default::default(),
+        }
+    }
+
+    pub fn name(mut self, name: &str) -> Self {
+        self.options.name = Some(name.to_owned());
+        self
+    }
+
+    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.options.properties = properties;
+        self
+    }
+
+    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.options.custom_properties = properties;
+        self
+    }
+
+    pub fn property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.options.properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.options
+            .custom_properties
+            .insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn last_known_state(mut self, state: ExecutionState) -> Self {
+        self.options.last_known_state = state;
+        self
+    }
+
+    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
+        self.options.create_time_since_epoch = time;
+        self
+    }
+
+    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
+        self.options.last_update_time_since_epoch = time;
+        self
+    }
+
+    pub async fn execute(self) -> Result<Id, errors::PostError> {
+        let generator = query::PostExecutionQueryGenerator {
+            query: self.store.query.clone(),
+            type_id: self.type_id,
+            options: self.options,
+        };
+        self.store.post_item(self.type_id, generator).await
+    }
+}
+
+#[derive(Debug)]
+pub struct PostContextRequest<'a> {
+    store: &'a mut MetadataStore,
+    type_id: Id,
+    name: String,
+    options: options::PostContextOptions,
+}
+
+impl<'a> PostContextRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, type_id: Id, context_name: &str) -> Self {
+        Self {
+            store,
+            type_id,
+            name: context_name.to_owned(),
+            options: Default::default(),
+        }
+    }
+
+    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.options.properties = properties;
+        self
+    }
+
+    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+        self.options.custom_properties = properties;
+        self
+    }
+
+    pub fn property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.options.properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.options
+            .custom_properties
+            .insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
+        self.options.create_time_since_epoch = time;
+        self
+    }
+
+    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
+        self.options.last_update_time_since_epoch = time;
+        self
+    }
+
+    pub async fn execute(self) -> Result<Id, errors::PostError> {
+        let generator = query::PostContextQueryGenerator {
+            query: self.store.query.clone(),
+            type_id: self.type_id,
+            name: self.name,
             options: self.options,
         };
         self.store.post_item(self.type_id, generator).await

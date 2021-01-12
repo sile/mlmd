@@ -296,8 +296,12 @@ impl Query {
         "SELECT id FROM Execution ORDER BY id DESC LIMIT 1"
     }
 
-    pub fn check_execution_name(&self) -> &'static str {
-        "SELECT count(*) FROM Execution WHERE type_id=? AND name=? AND id != ?"
+    pub fn check_execution_name(&self, is_post: bool) -> &'static str {
+        if is_post {
+            "SELECT count(*) FROM Execution WHERE type_id=? AND name=?"
+        } else {
+            "SELECT count(*) FROM Execution WHERE type_id=? AND name=? AND id != ?"
+        }
     }
 
     pub fn get_contexts(&self, options: &GetContextsOptions) -> String {
@@ -389,8 +393,12 @@ impl Query {
         "SELECT id FROM Context ORDER BY id DESC LIMIT 1"
     }
 
-    pub fn check_context_name(&self) -> &'static str {
-        "SELECT count(*) FROM Context WHERE type_id=? AND name=? AND id != ?"
+    pub fn check_context_name(&self, is_post: bool) -> &'static str {
+        if is_post {
+            "SELECT count(*) FROM Context WHERE type_id=? AND name=?"
+        } else {
+            "SELECT count(*) FROM Context WHERE type_id=? AND name=? AND id != ?"
+        }
     }
 
     pub fn insert_event(&self) -> &'static str {
@@ -1348,5 +1356,102 @@ impl PostItemQueryGenerator for PostArtifactQueryGenerator {
 
     fn generate_upsert_item_property(&self, value: &Value) -> String {
         self.query.upsert_artifact_property(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct PostExecutionQueryGenerator {
+    pub query: Query,
+    pub type_id: Id,
+    pub options: options::PostExecutionOptions,
+}
+
+impl PostItemQueryGenerator for PostExecutionQueryGenerator {
+    const TYPE_KIND: TypeKind = TypeKind::Execution;
+
+    fn item_properties(&self) -> &BTreeMap<String, Value> {
+        &self.options.properties
+    }
+
+    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+        &self.options.custom_properties
+    }
+
+    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
+        if let Some(name) = &self.options.name {
+            let values = vec![QueryValue::Int(self.type_id.get()), QueryValue::Str(name)];
+            Some((self.query.check_execution_name(true), values))
+        } else {
+            None
+        }
+    }
+
+    fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
+        let sql = self.query.insert_execution(&self.options);
+        let mut values = vec![
+            QueryValue::Int(self.type_id.get()),
+            QueryValue::Int(self.options.last_known_state as i32),
+            QueryValue::I64(self.options.create_time_since_epoch.as_millis() as i64),
+            QueryValue::I64(self.options.last_update_time_since_epoch.as_millis() as i64),
+        ];
+        if let Some(v) = &self.options.name {
+            values.push(QueryValue::Str(v));
+        }
+        (sql, values)
+    }
+
+    fn generate_last_item_id(&self) -> &'static str {
+        self.query.get_last_execution_id()
+    }
+
+    fn generate_upsert_item_property(&self, value: &Value) -> String {
+        self.query.upsert_execution_property(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct PostContextQueryGenerator {
+    pub query: Query,
+    pub type_id: Id,
+    pub name: String,
+    pub options: options::PostContextOptions,
+}
+
+impl PostItemQueryGenerator for PostContextQueryGenerator {
+    const TYPE_KIND: TypeKind = TypeKind::Context;
+
+    fn item_properties(&self) -> &BTreeMap<String, Value> {
+        &self.options.properties
+    }
+
+    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+        &self.options.custom_properties
+    }
+
+    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
+        let values = vec![
+            QueryValue::Int(self.type_id.get()),
+            QueryValue::Str(&self.name),
+        ];
+        Some((self.query.check_context_name(true), values))
+    }
+
+    fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
+        let sql = self.query.insert_context();
+        let values = vec![
+            QueryValue::Int(self.type_id.get()),
+            QueryValue::I64(self.options.create_time_since_epoch.as_millis() as i64),
+            QueryValue::I64(self.options.last_update_time_since_epoch.as_millis() as i64),
+            QueryValue::Str(&self.name),
+        ];
+        (sql.to_owned(), values)
+    }
+
+    fn generate_last_item_id(&self) -> &'static str {
+        self.query.get_last_context_id()
+    }
+
+    fn generate_upsert_item_property(&self, value: &Value) -> String {
+        self.query.upsert_context_property(value)
     }
 }

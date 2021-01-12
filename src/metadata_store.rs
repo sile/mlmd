@@ -1,8 +1,5 @@
 use self::errors::{GetError, InitError, PostError, PutError, PutTypeError};
-use self::options::{
-    GetEventsOptions, GetTypesOptions, PostContextOptions, PostExecutionOptions, PutEventOptions,
-    PutTypeOptions,
-};
+use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeOptions};
 use crate::metadata::{
     Artifact, Context, Event, EventStep, EventType, Execution, Id, PropertyType, Value,
 };
@@ -267,75 +264,11 @@ impl MetadataStore {
         Ok(items.into_iter().map(|(_, v)| v).collect())
     }
 
-    pub async fn post_execution(
+    pub fn post_execution(
         &mut self,
-        type_id: Id,
-        options: PostExecutionOptions,
-    ) -> Result<Id, PostError> {
-        let execution_type = self
-            .get_execution_types()
-            .id(type_id)
-            .execute()
-            .await?
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| PostError::TypeNotFound)?;
-        for (name, value) in &options.properties {
-            if execution_type.properties.get(name).copied() != Some(value.ty()) {
-                return Err(PostError::UndefinedProperty);
-            }
-        }
-
-        let mut connection = self.connection.begin().await?;
-
-        if let Some(name) = &options.name {
-            let count: i32 = sqlx::query_scalar(self.query.check_execution_name())
-                .bind(type_id.get())
-                .bind(name)
-                .bind(-1) // dummy execution id (TODO)
-                .fetch_one(&mut connection)
-                .await?;
-            if count > 0 {
-                return Err(PostError::NameConflict);
-            }
-        }
-
-        let sql = self.query.insert_execution(&options);
-        let mut query = sqlx::query(&sql)
-            .bind(type_id.get())
-            .bind(options.last_known_state as i32)
-            .bind(options.create_time_since_epoch.as_millis() as i64)
-            .bind(options.last_update_time_since_epoch.as_millis() as i64);
-        if let Some(v) = &options.name {
-            query = query.bind(v);
-        }
-        query.execute(&mut connection).await?;
-
-        let execution_id: i32 = sqlx::query_scalar(self.query.get_last_execution_id())
-            .fetch_one(&mut connection)
-            .await?;
-
-        for (name, value, is_custom) in options
-            .properties
-            .iter()
-            .map(|(k, v)| (k, v, false))
-            .chain(options.custom_properties.iter().map(|(k, v)| (k, v, true)))
-        {
-            let sql = self.query.upsert_execution_property(value);
-            let mut query = sqlx::query(&sql)
-                .bind(execution_id)
-                .bind(name)
-                .bind(is_custom);
-            query = match value {
-                Value::Int(v) => query.bind(*v),
-                Value::Double(v) => query.bind(*v),
-                Value::String(v) => query.bind(v),
-            };
-            query.execute(&mut connection).await?;
-        }
-
-        connection.commit().await?;
-        Ok(Id::new(execution_id))
+        type_id: Id, // TODO: name(?)
+    ) -> requests::PostExecutionRequest {
+        requests::PostExecutionRequest::new(self, type_id)
     }
 
     // TODO: remove redundant code
@@ -370,7 +303,7 @@ impl MetadataStore {
         let mut connection = self.connection.begin().await?;
 
         if let Some(name) = &execution.name {
-            let count: i32 = sqlx::query_scalar(self.query.check_execution_name())
+            let count: i32 = sqlx::query_scalar(self.query.check_execution_name(false))
                 .bind(execution.type_id.get())
                 .bind(name)
                 .bind(execution.id.get())
@@ -426,72 +359,12 @@ impl MetadataStore {
         requests::GetExecutionsRequest::new(self)
     }
 
-    pub async fn post_context(
+    pub fn post_context(
         &mut self,
-        type_id: Id,
+        type_id: Id, // TODO: type_name(?)
         context_name: &str,
-        options: PostContextOptions,
-    ) -> Result<Id, PostError> {
-        let context_type = self
-            .get_context_types()
-            .id(type_id)
-            .execute()
-            .await?
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| PostError::TypeNotFound)?;
-        for (name, value) in &options.properties {
-            if context_type.properties.get(name).copied() != Some(value.ty()) {
-                return Err(PostError::UndefinedProperty);
-            }
-        }
-
-        let mut connection = self.connection.begin().await?;
-
-        let count: i32 = sqlx::query_scalar(self.query.check_context_name())
-            .bind(type_id.get())
-            .bind(context_name)
-            .bind(-1) // dummy context id (TODO)
-            .fetch_one(&mut connection)
-            .await?;
-        if count > 0 {
-            return Err(PostError::NameConflict);
-        }
-
-        let sql = self.query.insert_context();
-        sqlx::query(&sql)
-            .bind(type_id.get())
-            .bind(options.create_time_since_epoch.as_millis() as i64)
-            .bind(options.last_update_time_since_epoch.as_millis() as i64)
-            .bind(context_name)
-            .execute(&mut connection)
-            .await?;
-
-        let context_id: i32 = sqlx::query_scalar(self.query.get_last_context_id())
-            .fetch_one(&mut connection)
-            .await?;
-
-        for (name, value, is_custom) in options
-            .properties
-            .iter()
-            .map(|(k, v)| (k, v, false))
-            .chain(options.custom_properties.iter().map(|(k, v)| (k, v, true)))
-        {
-            let sql = self.query.upsert_context_property(value);
-            let mut query = sqlx::query(&sql)
-                .bind(context_id)
-                .bind(name)
-                .bind(is_custom);
-            query = match value {
-                Value::Int(v) => query.bind(*v),
-                Value::Double(v) => query.bind(*v),
-                Value::String(v) => query.bind(v),
-            };
-            query.execute(&mut connection).await?;
-        }
-
-        connection.commit().await?;
-        Ok(Id::new(context_id))
+    ) -> requests::PostContextRequest {
+        requests::PostContextRequest::new(self, type_id, context_name)
     }
 
     // TODO: remove redundant code
@@ -525,7 +398,7 @@ impl MetadataStore {
 
         let mut connection = self.connection.begin().await?;
 
-        let count: i32 = sqlx::query_scalar(self.query.check_context_name())
+        let count: i32 = sqlx::query_scalar(self.query.check_context_name(false))
             .bind(context.type_id.get())
             .bind(&context.name)
             .bind(context.id.get())
