@@ -681,17 +681,19 @@ async fn put_event_works() -> anyhow::Result<()> {
     let a0 = store.post_artifact(t1).execute().await?;
     let a1 = store.post_artifact(t1).execute().await?;
 
-    store.put_event(EventType::Input, a0, e0, default()).await?;
     store
-        .put_event(
-            EventType::Output,
-            a1,
-            e1,
-            PutEventOptions::default().step(EventStep::Index(30)),
-        )
+        .put_event(e0, a0)
+        .ty(EventType::Input)
+        .execute()
+        .await?;
+    store
+        .put_event(e1, a1)
+        .ty(EventType::Output)
+        .step(EventStep::Index(30))
+        .execute()
         .await?;
 
-    let events = store.get_events(default()).await?;
+    let events = store.get_events().execute().await?;
     assert_eq!(events.len(), 2);
 
     assert_eq!(events[0].artifact_id, a0);
@@ -712,37 +714,28 @@ async fn get_events_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
 
-    let events = store.get_events(default()).await?;
+    let events = store.get_events().execute().await?;
     assert_eq!(events, vec![event0(), event1()]);
 
-    let events = store
-        .get_events(GetEventsOptions::default().artifact_ids(&[Id::new(1)]))
-        .await?;
+    let events = store.get_events().artifact(Id::new(1)).execute().await?;
     assert_eq!(events, vec![event0()]);
 
-    let events = store
-        .get_events(GetEventsOptions::default().artifact_ids(&[Id::new(2)]))
-        .await?;
+    let events = store.get_events().artifact(Id::new(2)).execute().await?;
     assert_eq!(events, vec![event1()]);
 
-    let events = store
-        .get_events(GetEventsOptions::default().execution_ids(&[Id::new(1)]))
-        .await?;
+    let events = store.get_events().execution(Id::new(1)).execute().await?;
     assert_eq!(events, vec![event0(), event1()]);
 
-    let events = store
-        .get_events(GetEventsOptions::default().execution_ids(&[Id::new(2)]))
-        .await?;
+    let events = store.get_events().execution(Id::new(2)).execute().await?;
     assert_eq!(events, vec![]);
 
     let events = store
-        .get_events(
-            GetEventsOptions::default()
-                .artifact_ids(&[Id::new(1)])
-                .execution_ids(&[Id::new(1)]),
-        )
+        .get_events()
+        .artifact(Id::new(1))
+        .execution(Id::new(1))
+        .execute()
         .await?;
-    assert_eq!(events, vec![event0()]);
+    assert_eq!(events, vec![event0(), event1()]);
 
     Ok(())
 }
@@ -803,10 +796,6 @@ fn artifact1() -> Artifact {
         create_time_since_epoch: Duration::from_millis(1609134223250),
         last_update_time_since_epoch: Duration::from_millis(1609134223518),
     }
-}
-
-fn default<T: Default>() -> T {
-    T::default()
 }
 
 fn execution0() -> Execution {

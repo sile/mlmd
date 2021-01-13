@@ -1,6 +1,6 @@
 use crate::metadata::{
-    Artifact, ArtifactState, ArtifactType, Context, ContextType, Execution, ExecutionState,
-    ExecutionType, Id, PropertyType, Value,
+    Artifact, ArtifactState, ArtifactType, Context, ContextType, Event, EventStep, EventType,
+    Execution, ExecutionState, ExecutionType, Id, PropertyType, Value,
 };
 use crate::metadata_store::{errors, options, MetadataStore};
 use crate::query;
@@ -748,5 +748,89 @@ impl<'a> PutAssociationRequest<'a> {
         self.store
             .put_relation(self.context_id, self.execution_id, false)
             .await
+    }
+}
+
+#[derive(Debug)]
+pub struct PutEventRequest<'a> {
+    store: &'a mut MetadataStore,
+    execution_id: Id,
+    artifact_id: Id,
+    options: options::PutEventOptions,
+}
+
+impl<'a> PutEventRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, execution_id: Id, artifact_id: Id) -> Self {
+        Self {
+            store,
+            execution_id,
+            artifact_id,
+            options: Default::default(),
+        }
+    }
+
+    pub fn ty(mut self, event_type: EventType) -> Self {
+        self.options.event_type = event_type;
+        self
+    }
+
+    pub fn path(mut self, path: &[EventStep]) -> Self {
+        self.options.path.extend_from_slice(path);
+        self
+    }
+
+    pub fn step(mut self, step: EventStep) -> Self {
+        self.options.path.push(step);
+        self
+    }
+
+    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
+        self.options.create_time_since_epoch = time;
+        self
+    }
+
+    pub async fn execute(self) -> Result<(), errors::PutError> {
+        self.store
+            .execute_put_event(self.execution_id, self.artifact_id, self.options)
+            .await
+    }
+}
+
+#[derive(Debug)]
+pub struct GetEventsRequest<'a> {
+    store: &'a mut MetadataStore,
+    options: options::GetEventsOptions,
+}
+
+impl<'a> GetEventsRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore) -> Self {
+        Self {
+            store,
+            options: Default::default(),
+        }
+    }
+
+    pub fn execution(mut self, id: Id) -> Self {
+        self.options.execution_ids.push(id);
+        self
+    }
+
+    pub fn executions(mut self, ids: &[Id]) -> Self {
+        self.options.execution_ids.extend(ids);
+        self
+    }
+
+    pub fn artifact(mut self, id: Id) -> Self {
+        self.options.artifact_ids.push(id);
+        self
+    }
+
+    pub fn artifacts(mut self, ids: &[Id]) -> Self {
+        self.options.artifact_ids.extend(ids);
+        self
+    }
+
+    pub async fn execute(self) -> Result<Vec<Event>, errors::GetError> {
+        self.store.execute_get_events(self.options).await
     }
 }

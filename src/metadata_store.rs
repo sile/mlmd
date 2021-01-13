@@ -25,6 +25,7 @@ pub struct MetadataStore {
 }
 
 impl MetadataStore {
+    // TODO: connect
     pub async fn new(database_uri: &str) -> Result<Self, InitError> {
         let query = if database_uri.starts_with("sqlite:") {
             Query::sqlite()
@@ -360,20 +361,38 @@ impl MetadataStore {
         requests::PutAssociationRequest::new(self, context_id, execution_id)
     }
 
-    pub async fn put_event(
+    pub fn put_event(&mut self, execution_id: Id, artifact_id: Id) -> requests::PutEventRequest {
+        requests::PutEventRequest::new(self, execution_id, artifact_id)
+    }
+
+    pub(crate) async fn execute_put_event(
         &mut self,
-        event_type: EventType,
-        artifact_id: Id,
         execution_id: Id,
+        artifact_id: Id,
         options: PutEventOptions,
     ) -> Result<(), PutError> {
-        // TODO: check whether artifact and execution exist
+        let count: i32 = sqlx::query_scalar(self.query.check_execution_id())
+            .bind(execution_id.get())
+            .fetch_one(&mut self.connection)
+            .await?;
+        if count == 0 {
+            return Err(PutError::NotFound);
+        }
+
+        let count: i32 = sqlx::query_scalar(self.query.check_artifact_id())
+            .bind(artifact_id.get())
+            .fetch_one(&mut self.connection)
+            .await?;
+        if count == 0 {
+            return Err(PutError::NotFound);
+        }
+
         let mut connection = self.connection.begin().await?;
 
         sqlx::query(self.query.insert_event())
             .bind(artifact_id.get())
             .bind(execution_id.get())
-            .bind(event_type as i32)
+            .bind(options.event_type as i32)
             .bind(options.create_time_since_epoch.as_millis() as i64)
             .execute(&mut connection)
             .await?;
@@ -394,7 +413,14 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub async fn get_events(&mut self, options: GetEventsOptions) -> Result<Vec<Event>, GetError> {
+    pub fn get_events(&mut self) -> requests::GetEventsRequest {
+        requests::GetEventsRequest::new(self)
+    }
+
+    pub(crate) async fn execute_get_events(
+        &mut self,
+        options: GetEventsOptions,
+    ) -> Result<Vec<Event>, GetError> {
         let sql = self.query.get_events(&options);
         let mut query = sqlx::query_as::<_, query::Event>(&sql);
         for id in &options.artifact_ids {

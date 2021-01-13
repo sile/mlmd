@@ -467,7 +467,7 @@ impl Query {
             ));
         }
         if !conditions.is_empty() {
-            query += &format!("WHERE {}", conditions.join(" AND "));
+            query += &format!("WHERE {}", conditions.join(" OR "));
         }
         query
     }

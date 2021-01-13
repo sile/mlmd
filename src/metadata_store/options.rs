@@ -1,4 +1,6 @@
-use crate::metadata::{ArtifactState, EventStep, ExecutionState, Id, PropertyType, Value};
+use crate::metadata::{
+    ArtifactState, EventStep, EventType, ExecutionState, Id, PropertyType, Value,
+};
 use crate::query::QueryValue;
 use std::collections::BTreeMap;
 use std::time::{Duration, UNIX_EPOCH};
@@ -342,6 +344,7 @@ impl PostContextOptions {
 
 #[derive(Debug, Clone)]
 pub struct PutEventOptions {
+    pub(crate) event_type: EventType,
     pub(crate) path: Vec<EventStep>,
     pub(crate) create_time_since_epoch: Duration,
 }
@@ -349,6 +352,7 @@ pub struct PutEventOptions {
 impl Default for PutEventOptions {
     fn default() -> Self {
         Self {
+            event_type: EventType::Unknown,
             path: Vec::new(),
             create_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
         }
