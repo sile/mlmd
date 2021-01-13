@@ -90,6 +90,18 @@ impl Query {
         "INSERT INTO TypeProperty (type_id, name, data_type) VALUES ($1, $2, $3)"
     }
 
+    pub fn check_context_id(&self) -> &'static str {
+        "SELECT count(*) FROM Context WHERE id=?"
+    }
+
+    pub fn check_artifact_id(&self) -> &'static str {
+        "SELECT count(*) FROM Artifact WHERE id=?"
+    }
+
+    pub fn check_execution_id(&self) -> &'static str {
+        "SELECT count(*) FROM Execution WHERE id=?"
+    }
+
     pub fn check_artifact_name(&self, is_post: bool) -> &'static str {
         if is_post {
             "SELECT count(*) FROM Artifact WHERE type_id=? AND name=?"

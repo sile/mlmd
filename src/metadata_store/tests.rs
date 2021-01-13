@@ -631,7 +631,7 @@ async fn put_attribution_works() -> anyhow::Result<()> {
     let _c0 = store.post_context(t1, "foo").execute().await?;
     let c1 = store.post_context(t1, "bar").execute().await?;
 
-    store.put_attribution(c1, a0).await?;
+    store.put_attribution(c1, a0).execute().await?;
     let contexts = store.get_contexts().artifact(a0).execute().await?;
     assert_eq!(contexts.len(), 1);
     assert_eq!(contexts[0].id, c1);
@@ -656,7 +656,7 @@ async fn put_association_works() -> anyhow::Result<()> {
     let _c0 = store.post_context(t1, "foo").execute().await?;
     let c1 = store.post_context(t1, "bar").execute().await?;
 
-    store.put_association(c1, e0).await?;
+    store.put_association(c1, e0).execute().await?;
     let contexts = store.get_contexts().execution(e0).execute().await?;
     assert_eq!(contexts.len(), 1);
     assert_eq!(contexts[0].id, c1);

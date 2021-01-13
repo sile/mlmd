@@ -704,3 +704,49 @@ impl<'a> PutContextRequest<'a> {
         self.store.put_item(generator).await
     }
 }
+
+#[derive(Debug)]
+pub struct PutAttributionRequest<'a> {
+    store: &'a mut MetadataStore,
+    context_id: Id,
+    artifact_id: Id,
+}
+
+impl<'a> PutAttributionRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, context_id: Id, artifact_id: Id) -> Self {
+        Self {
+            store,
+            context_id,
+            artifact_id,
+        }
+    }
+
+    pub async fn execute(self) -> Result<(), errors::PutError> {
+        self.store
+            .put_relation(self.context_id, self.artifact_id, true)
+            .await
+    }
+}
+
+#[derive(Debug)]
+pub struct PutAssociationRequest<'a> {
+    store: &'a mut MetadataStore,
+    context_id: Id,
+    execution_id: Id,
+}
+
+impl<'a> PutAssociationRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, context_id: Id, execution_id: Id) -> Self {
+        Self {
+            store,
+            context_id,
+            execution_id,
+        }
+    }
+
+    pub async fn execute(self) -> Result<(), errors::PutError> {
+        self.store
+            .put_relation(self.context_id, self.execution_id, false)
+            .await
+    }
+}

@@ -290,7 +290,7 @@ impl MetadataStore {
 
     pub fn post_context(
         &mut self,
-        type_id: Id, // TODO: type_name(?)
+        type_id: Id, // TODO: type_name(?) or enum Type{Id(), Name()}
         context_name: &str,
     ) -> requests::PostContextRequest {
         requests::PostContextRequest::new(self, type_id, context_name)
@@ -305,32 +305,59 @@ impl MetadataStore {
         requests::GetContextsRequest::new(self)
     }
 
-    pub async fn put_attribution(
+    pub(crate) async fn put_relation(
         &mut self,
         context_id: Id,
-        artifact_id: Id,
+        item_id: Id,
+        is_attribution: bool,
     ) -> Result<(), PutError> {
-        // TODO: check whether context and artifact exist
-        sqlx::query(self.query.insert_attribution())
+        let count: i32 = sqlx::query_scalar(self.query.check_context_id())
             .bind(context_id.get())
-            .bind(artifact_id.get())
-            .execute(&mut self.connection)
+            .fetch_one(&mut self.connection)
             .await?;
+        if count == 0 {
+            return Err(PutError::NotFound);
+        }
+
+        let count: i32 = sqlx::query_scalar(if is_attribution {
+            self.query.check_artifact_id()
+        } else {
+            self.query.check_execution_id()
+        })
+        .bind(item_id.get())
+        .fetch_one(&mut self.connection)
+        .await?;
+        if count == 0 {
+            return Err(PutError::NotFound);
+        }
+
+        sqlx::query(if is_attribution {
+            self.query.insert_attribution()
+        } else {
+            self.query.insert_association()
+        })
+        .bind(context_id.get())
+        .bind(item_id.get())
+        .execute(&mut self.connection)
+        .await?;
+
         Ok(())
     }
 
-    pub async fn put_association(
+    pub fn put_attribution(
+        &mut self,
+        context_id: Id,
+        artifact_id: Id,
+    ) -> requests::PutAttributionRequest {
+        requests::PutAttributionRequest::new(self, context_id, artifact_id)
+    }
+
+    pub fn put_association(
         &mut self,
         context_id: Id,
         execution_id: Id,
-    ) -> Result<(), PutError> {
-        // TODO: check whether context and execution exist
-        sqlx::query(self.query.insert_association())
-            .bind(context_id.get())
-            .bind(execution_id.get())
-            .execute(&mut self.connection)
-            .await?;
-        Ok(())
+    ) -> requests::PutAssociationRequest {
+        requests::PutAssociationRequest::new(self, context_id, execution_id)
     }
 
     pub async fn put_event(
