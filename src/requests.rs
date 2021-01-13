@@ -644,3 +644,63 @@ impl<'a> PostContextRequest<'a> {
         self.store.post_item(self.type_id, generator).await
     }
 }
+
+#[derive(Debug)]
+pub struct PutArtifactRequest<'a> {
+    store: &'a mut MetadataStore,
+    item: Artifact,
+}
+
+impl<'a> PutArtifactRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, item: Artifact) -> Self {
+        Self { store, item }
+    }
+
+    pub async fn execute(self) -> Result<(), errors::PutError> {
+        let generator = query::PutArtifactQueryGenerator {
+            query: self.store.query.clone(),
+            item: self.item,
+        };
+        self.store.put_item(generator).await
+    }
+}
+
+#[derive(Debug)]
+pub struct PutExecutionRequest<'a> {
+    store: &'a mut MetadataStore,
+    item: Execution,
+}
+
+impl<'a> PutExecutionRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, item: Execution) -> Self {
+        Self { store, item }
+    }
+
+    pub async fn execute(self) -> Result<(), errors::PutError> {
+        let generator = query::PutExecutionQueryGenerator {
+            query: self.store.query.clone(),
+            item: self.item,
+        };
+        self.store.put_item(generator).await
+    }
+}
+
+#[derive(Debug)]
+pub struct PutContextRequest<'a> {
+    store: &'a mut MetadataStore,
+    item: Context,
+}
+
+impl<'a> PutContextRequest<'a> {
+    pub(crate) fn new(store: &'a mut MetadataStore, item: Context) -> Self {
+        Self { store, item }
+    }
+
+    pub async fn execute(self) -> Result<(), errors::PutError> {
+        let generator = query::PutContextQueryGenerator {
+            query: self.store.query.clone(),
+            item: self.item,
+        };
+        self.store.put_item(generator).await
+    }
+}

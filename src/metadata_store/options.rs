@@ -9,6 +9,15 @@ pub struct GetTypesOptions {
     pub ids: Vec<Id>,
 }
 
+impl GetTypesOptions {
+    pub fn by_id(id: Id) -> Self {
+        Self {
+            name: None,
+            ids: vec![id],
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct PutTypeOptions {
     pub can_add_fields: bool,

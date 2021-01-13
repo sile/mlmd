@@ -66,22 +66,13 @@ impl MetadataStore {
     }
 
     // TODO: s/type_id/type_name/
-    pub async fn post_item<T>(&mut self, type_id: Id, generator: T) -> Result<Id, PostError>
+    pub(crate) async fn post_item<T>(&mut self, type_id: Id, generator: T) -> Result<Id, PostError>
     where
         T: query::PostItemQueryGenerator,
     {
         let property_types = self
-            .get_types(
-                T::TYPE_KIND,
-                |_, _, properties| properties,
-                GetTypesOptions {
-                    name: None,
-                    ids: vec![type_id],
-                },
-            )
+            .get_type_properties(T::TYPE_KIND, type_id)
             .await?
-            .into_iter()
-            .nth(0)
             .ok_or_else(|| PostError::TypeNotFound)?;
         for (name, value) in generator.item_properties() {
             if property_types.get(name).copied() != Some(value.ty()) {
@@ -149,42 +140,58 @@ impl MetadataStore {
         requests::GetArtifactsRequest::new(self)
     }
 
-    // TODO: remove redundant code
-    pub async fn put_artifact(&mut self, artifact: &Artifact) -> Result<(), PutError> {
-        let artifact_type = self
-            .get_artifact_types()
-            .id(artifact.type_id)
-            .execute()
+    async fn get_type_properties(
+        &mut self,
+        type_kind: TypeKind,
+        type_id: Id,
+    ) -> Result<Option<BTreeMap<String, PropertyType>>, GetError> {
+        Ok(self
+            .get_types(
+                type_kind,
+                |_, _, properties| properties,
+                GetTypesOptions::by_id(type_id),
+            )
             .await?
             .into_iter()
-            .nth(0)
+            .nth(0))
+    }
+
+    pub(crate) async fn put_item<T>(&mut self, generator: T) -> Result<(), PutError>
+    where
+        T: query::PutItemQueryGenerator,
+    {
+        let item_id = generator.item_id();
+        let type_id = generator.type_id();
+        let property_types = self
+            .get_type_properties(T::TYPE_KIND, type_id)
+            .await?
             .ok_or_else(|| PutError::TypeNotFound)?;
-        for (name, value) in &artifact.properties {
-            if artifact_type.properties.get(name).copied() != Some(value.ty()) {
+        for (name, value) in generator.item_properties() {
+            if property_types.get(name).copied() != Some(value.ty()) {
                 return Err(PutError::UndefinedProperty);
             }
         }
 
-        // TODO: check if type id is unchanged
-        let old = self
-            .get_artifacts()
-            .id(artifact.id)
-            .execute()
-            .await?
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| PutError::NotFound)?;
-        if old.type_id != artifact.type_id {
-            return Err(PutError::WrongTypeId);
+        let current_type_id: Option<i32> =
+            sqlx::query_scalar(generator.generate_get_type_id_query())
+                .bind(item_id.get())
+                .fetch_optional(&mut self.connection)
+                .await?;
+        match current_type_id {
+            None => return Err(PutError::NotFound),
+            Some(id) => {
+                if id != type_id.get() {
+                    return Err(PutError::WrongTypeId);
+                }
+            }
         }
 
         let mut connection = self.connection.begin().await?;
 
-        if let Some(name) = &artifact.name {
-            let count: i32 = sqlx::query_scalar(self.query.check_artifact_name(false))
-                .bind(artifact.type_id.get())
-                .bind(name)
-                .bind(artifact.id.get())
+        if let Some((sql, values)) = generator.generate_check_item_name_query() {
+            let count: i32 = values
+                .into_iter()
+                .fold(sqlx::query_scalar(&sql), |q, v| v.bind_scalar(q))
                 .fetch_one(&mut connection)
                 .await?;
             if count > 0 {
@@ -192,31 +199,27 @@ impl MetadataStore {
             }
         }
 
-        let sql = self.query.update_artifact(&artifact);
-        let mut query = sqlx::query(&sql)
-            .bind(artifact.state as i32)
-            .bind(artifact.create_time_since_epoch.as_millis() as i64)
-            .bind(artifact.last_update_time_since_epoch.as_millis() as i64);
-        if let Some(v) = &artifact.name {
-            query = query.bind(v);
-        }
-        if let Some(v) = &artifact.uri {
-            query = query.bind(v);
-        }
-        query
-            .bind(artifact.id.get())
+        let (sql, values) = generator.generate_update_item_query();
+        values
+            .into_iter()
+            .fold(sqlx::query(&sql), |q, v| v.bind(q))
             .execute(&mut connection)
             .await?;
 
-        for (name, value, is_custom) in artifact
-            .properties
+        let properties = generator
+            .item_properties()
             .iter()
             .map(|(k, v)| (k, v, false))
-            .chain(artifact.custom_properties.iter().map(|(k, v)| (k, v, true)))
-        {
-            let sql = self.query.upsert_artifact_property(value);
+            .chain(
+                generator
+                    .item_custom_properties()
+                    .iter()
+                    .map(|(k, v)| (k, v, true)),
+            );
+        for (name, value, is_custom) in properties {
+            let sql = generator.generate_upsert_item_property(value);
             let mut query = sqlx::query(&sql)
-                .bind(artifact.id.get())
+                .bind(item_id.get())
                 .bind(name)
                 .bind(is_custom);
             query = match value {
@@ -229,6 +232,11 @@ impl MetadataStore {
 
         connection.commit().await?;
         Ok(())
+    }
+
+    pub fn put_artifact(&mut self, artifact: &Artifact) -> requests::PutArtifactRequest {
+        // TODO: remove clone
+        requests::PutArtifactRequest::new(self, artifact.clone())
     }
 
     pub(crate) async fn get_items<T>(&mut self, generator: T) -> Result<Vec<T::Item>, GetError>
@@ -271,88 +279,9 @@ impl MetadataStore {
         requests::PostExecutionRequest::new(self, type_id)
     }
 
-    // TODO: remove redundant code
-    pub async fn put_execution(&mut self, execution: &Execution) -> Result<(), PutError> {
-        let execution_type = self
-            .get_execution_types()
-            .id(execution.type_id)
-            .execute()
-            .await?
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| PutError::TypeNotFound)?;
-        for (name, value) in &execution.properties {
-            if execution_type.properties.get(name).copied() != Some(value.ty()) {
-                return Err(PutError::UndefinedProperty);
-            }
-        }
-
-        // TODO: check if type id is unchanged
-        let old = self
-            .get_executions()
-            .id(execution.id)
-            .execute()
-            .await?
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| PutError::NotFound)?;
-        if old.type_id != execution.type_id {
-            return Err(PutError::WrongTypeId);
-        }
-
-        let mut connection = self.connection.begin().await?;
-
-        if let Some(name) = &execution.name {
-            let count: i32 = sqlx::query_scalar(self.query.check_execution_name(false))
-                .bind(execution.type_id.get())
-                .bind(name)
-                .bind(execution.id.get())
-                .fetch_one(&mut connection)
-                .await?;
-            if count > 0 {
-                return Err(PutError::NameConflict);
-            }
-        }
-
-        let sql = self.query.update_execution(&execution);
-        let mut query = sqlx::query(&sql)
-            .bind(execution.last_known_state as i32)
-            .bind(execution.create_time_since_epoch.as_millis() as i64)
-            .bind(execution.last_update_time_since_epoch.as_millis() as i64);
-        if let Some(v) = &execution.name {
-            query = query.bind(v);
-        }
-        query
-            .bind(execution.id.get())
-            .execute(&mut connection)
-            .await?;
-
-        for (name, value, is_custom) in execution
-            .properties
-            .iter()
-            .map(|(k, v)| (k, v, false))
-            .chain(
-                execution
-                    .custom_properties
-                    .iter()
-                    .map(|(k, v)| (k, v, true)),
-            )
-        {
-            let sql = self.query.upsert_execution_property(value);
-            let mut query = sqlx::query(&sql)
-                .bind(execution.id.get())
-                .bind(name)
-                .bind(is_custom);
-            query = match value {
-                Value::Int(v) => query.bind(*v),
-                Value::Double(v) => query.bind(*v),
-                Value::String(v) => query.bind(v),
-            };
-            query.execute(&mut connection).await?;
-        }
-
-        connection.commit().await?;
-        Ok(())
+    pub fn put_execution(&mut self, execution: &Execution) -> requests::PutExecutionRequest {
+        // TODO: remove clone
+        requests::PutExecutionRequest::new(self, execution.clone())
     }
 
     pub fn get_executions(&mut self) -> requests::GetExecutionsRequest {
@@ -367,77 +296,9 @@ impl MetadataStore {
         requests::PostContextRequest::new(self, type_id, context_name)
     }
 
-    // TODO: remove redundant code
-    pub async fn put_context(&mut self, context: &Context) -> Result<(), PutError> {
-        let context_type = self
-            .get_context_types()
-            .id(context.type_id)
-            .execute()
-            .await?
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| PutError::TypeNotFound)?;
-        for (name, value) in &context.properties {
-            if context_type.properties.get(name).copied() != Some(value.ty()) {
-                return Err(PutError::UndefinedProperty);
-            }
-        }
-
-        // TODO: check if type id is unchanged
-        let old = self
-            .get_contexts()
-            .id(context.id)
-            .execute()
-            .await?
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| PutError::NotFound)?;
-        if old.type_id != context.type_id {
-            return Err(PutError::WrongTypeId);
-        }
-
-        let mut connection = self.connection.begin().await?;
-
-        let count: i32 = sqlx::query_scalar(self.query.check_context_name(false))
-            .bind(context.type_id.get())
-            .bind(&context.name)
-            .bind(context.id.get())
-            .fetch_one(&mut connection)
-            .await?;
-        if count > 0 {
-            return Err(PutError::NameConflict);
-        }
-
-        let sql = self.query.update_context();
-        sqlx::query(&sql)
-            .bind(context.create_time_since_epoch.as_millis() as i64)
-            .bind(context.last_update_time_since_epoch.as_millis() as i64)
-            .bind(&context.name)
-            .bind(context.id.get())
-            .execute(&mut connection)
-            .await?;
-
-        for (name, value, is_custom) in context
-            .properties
-            .iter()
-            .map(|(k, v)| (k, v, false))
-            .chain(context.custom_properties.iter().map(|(k, v)| (k, v, true)))
-        {
-            let sql = self.query.upsert_context_property(value);
-            let mut query = sqlx::query(&sql)
-                .bind(context.id.get())
-                .bind(name)
-                .bind(is_custom);
-            query = match value {
-                Value::Int(v) => query.bind(*v),
-                Value::Double(v) => query.bind(*v),
-                Value::String(v) => query.bind(v),
-            };
-            query.execute(&mut connection).await?;
-        }
-
-        connection.commit().await?;
-        Ok(())
+    pub fn put_context(&mut self, context: &Context) -> requests::PutContextRequest {
+        // TODO: remove clone
+        requests::PutContextRequest::new(self, context.clone())
     }
 
     pub fn get_contexts(&mut self) -> requests::GetContextsRequest {

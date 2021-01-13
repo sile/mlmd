@@ -221,7 +221,7 @@ async fn put_artifact_works() -> anyhow::Result<()> {
     artifact
         .custom_properties
         .insert("bar".to_string(), Value::Int(10));
-    store.put_artifact(&artifact).await?;
+    store.put_artifact(&artifact).execute().await?;
 
     assert_eq!(store.get_artifacts().execute().await?.len(), 2);
     assert_eq!(
@@ -276,7 +276,7 @@ async fn put_execution_works() -> anyhow::Result<()> {
     execution
         .custom_properties
         .insert("bar".to_string(), Value::Int(10));
-    store.put_execution(&execution).await?;
+    store.put_execution(&execution).execute().await?;
 
     assert_eq!(store.get_executions().execute().await?.len(), 1);
     assert_eq!(
@@ -479,7 +479,7 @@ async fn put_context_works() -> anyhow::Result<()> {
     context
         .custom_properties
         .insert("bar".to_string(), Value::Int(10));
-    store.put_context(&context).await?;
+    store.put_context(&context).execute().await?;
 
     assert_eq!(store.get_contexts().execute().await?.len(), 1);
     assert_eq!(

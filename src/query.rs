@@ -1,5 +1,5 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, ConvertError, EventStep, Id, Value};
+use crate::metadata::{self, Artifact, Context, ConvertError, EventStep, Execution, Id, Value};
 use crate::metadata_store::options::{
     self, GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
     GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
@@ -1024,142 +1024,6 @@ impl<'a> QueryValue<'a> {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-pub struct ArtifactProperty {
-    pub artifact_id: i32,
-    pub name: String,
-    pub is_custom_property: bool,
-    pub int_value: Option<i32>,
-    pub double_value: Option<f64>,
-    pub string_value: Option<String>,
-}
-
-impl ArtifactProperty {
-    pub fn into_name_and_vaue(self) -> Result<(String, Value), ConvertError> {
-        match self {
-            Self {
-                name,
-                int_value: Some(v),
-                double_value: None,
-                string_value: None,
-                ..
-            } => Ok((name, Value::Int(v))),
-            Self {
-                name,
-                int_value: None,
-                double_value: Some(v),
-                string_value: None,
-                ..
-            } => Ok((name, Value::Double(v))),
-            Self {
-                name,
-                int_value: None,
-                double_value: None,
-                string_value: Some(v),
-                ..
-            } => Ok((name, Value::String(v))),
-            _ => Err(ConvertError::WrongPropertyValue),
-        }
-    }
-}
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct Execution {
-    pub id: i32,
-    pub type_id: i32,
-    pub name: Option<String>,
-    pub last_known_state: i32,
-    pub create_time_since_epoch: i64,
-    pub last_update_time_since_epoch: i64,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct ExecutionProperty {
-    pub execution_id: i32,
-    pub name: String,
-    pub is_custom_property: bool,
-    pub int_value: Option<i32>,
-    pub double_value: Option<f64>,
-    pub string_value: Option<String>,
-}
-
-impl ExecutionProperty {
-    pub fn into_name_and_vaue(self) -> Result<(String, Value), ConvertError> {
-        match self {
-            Self {
-                name,
-                int_value: Some(v),
-                double_value: None,
-                string_value: None,
-                ..
-            } => Ok((name, Value::Int(v))),
-            Self {
-                name,
-                int_value: None,
-                double_value: Some(v),
-                string_value: None,
-                ..
-            } => Ok((name, Value::Double(v))),
-            Self {
-                name,
-                int_value: None,
-                double_value: None,
-                string_value: Some(v),
-                ..
-            } => Ok((name, Value::String(v))),
-            _ => Err(ConvertError::WrongPropertyValue),
-        }
-    }
-}
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct Context {
-    pub id: i32,
-    pub type_id: i32,
-    pub name: String,
-    pub create_time_since_epoch: i64,
-    pub last_update_time_since_epoch: i64,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct ContextProperty {
-    pub context_id: i32,
-    pub name: String,
-    pub is_custom_property: bool,
-    pub int_value: Option<i32>,
-    pub double_value: Option<f64>,
-    pub string_value: Option<String>,
-}
-
-impl ContextProperty {
-    pub fn into_name_and_vaue(self) -> Result<(String, Value), ConvertError> {
-        match self {
-            Self {
-                name,
-                int_value: Some(v),
-                double_value: None,
-                string_value: None,
-                ..
-            } => Ok((name, Value::Int(v))),
-            Self {
-                name,
-                int_value: None,
-                double_value: Some(v),
-                string_value: None,
-                ..
-            } => Ok((name, Value::Double(v))),
-            Self {
-                name,
-                int_value: None,
-                double_value: None,
-                string_value: Some(v),
-                ..
-            } => Ok((name, Value::String(v))),
-            _ => Err(ConvertError::WrongPropertyValue),
-        }
-    }
-}
-
-#[derive(Debug, sqlx::FromRow)]
 pub struct Property {
     pub id: i32,
     pub name: String,
@@ -1449,6 +1313,198 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
 
     fn generate_last_item_id(&self) -> &'static str {
         self.query.get_last_context_id()
+    }
+
+    fn generate_upsert_item_property(&self, value: &Value) -> String {
+        self.query.upsert_context_property(value)
+    }
+}
+
+pub trait PutItemQueryGenerator {
+    const TYPE_KIND: TypeKind;
+
+    fn item_id(&self) -> Id;
+    fn type_id(&self) -> Id;
+    fn item_properties(&self) -> &BTreeMap<String, Value>;
+    fn item_custom_properties(&self) -> &BTreeMap<String, Value>;
+    fn generate_get_type_id_query(&self) -> &'static str;
+    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
+    fn generate_update_item_query(&self) -> (String, Vec<QueryValue>);
+    fn generate_upsert_item_property(&self, value: &Value) -> String;
+}
+
+#[derive(Debug)]
+pub struct PutArtifactQueryGenerator {
+    pub query: Query,
+    pub item: Artifact,
+}
+
+impl PutItemQueryGenerator for PutArtifactQueryGenerator {
+    const TYPE_KIND: TypeKind = TypeKind::Artifact;
+
+    fn item_id(&self) -> Id {
+        self.item.id
+    }
+
+    fn type_id(&self) -> Id {
+        self.item.type_id
+    }
+
+    fn item_properties(&self) -> &BTreeMap<String, Value> {
+        &self.item.properties
+    }
+
+    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+        &self.item.custom_properties
+    }
+
+    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
+        if let Some(name) = &self.item.name {
+            let values = vec![
+                QueryValue::Int(self.item.type_id.get()),
+                QueryValue::Str(name),
+            ];
+            Some((self.query.check_artifact_name(true), values))
+        } else {
+            None
+        }
+    }
+
+    fn generate_get_type_id_query(&self) -> &'static str {
+        // TODO
+        "SELECT type_id FROM Artifact WHERE id = ?"
+    }
+
+    fn generate_update_item_query(&self) -> (String, Vec<QueryValue>) {
+        let sql = self.query.update_artifact(&self.item);
+        let mut values = vec![
+            QueryValue::Int(self.item.state as i32),
+            QueryValue::I64(self.item.create_time_since_epoch.as_millis() as i64),
+            QueryValue::I64(self.item.last_update_time_since_epoch.as_millis() as i64),
+        ];
+        if let Some(v) = &self.item.name {
+            values.push(QueryValue::Str(v));
+        }
+        if let Some(v) = &self.item.uri {
+            values.push(QueryValue::Str(v));
+        }
+        values.push(QueryValue::Int(self.item.id.get()));
+        (sql, values)
+    }
+
+    fn generate_upsert_item_property(&self, value: &Value) -> String {
+        self.query.upsert_artifact_property(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct PutExecutionQueryGenerator {
+    pub query: Query,
+    pub item: Execution,
+}
+
+impl PutItemQueryGenerator for PutExecutionQueryGenerator {
+    const TYPE_KIND: TypeKind = TypeKind::Execution;
+
+    fn item_id(&self) -> Id {
+        self.item.id
+    }
+
+    fn type_id(&self) -> Id {
+        self.item.type_id
+    }
+
+    fn item_properties(&self) -> &BTreeMap<String, Value> {
+        &self.item.properties
+    }
+
+    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+        &self.item.custom_properties
+    }
+
+    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
+        if let Some(name) = &self.item.name {
+            let values = vec![
+                QueryValue::Int(self.item.type_id.get()),
+                QueryValue::Str(name),
+            ];
+            Some((self.query.check_execution_name(true), values))
+        } else {
+            None
+        }
+    }
+
+    fn generate_get_type_id_query(&self) -> &'static str {
+        // TODO
+        "SELECT type_id FROM Execution WHERE id = ?"
+    }
+
+    fn generate_update_item_query(&self) -> (String, Vec<QueryValue>) {
+        let sql = self.query.update_execution(&self.item);
+        let mut values = vec![
+            QueryValue::Int(self.item.last_known_state as i32),
+            QueryValue::I64(self.item.create_time_since_epoch.as_millis() as i64),
+            QueryValue::I64(self.item.last_update_time_since_epoch.as_millis() as i64),
+        ];
+        if let Some(v) = &self.item.name {
+            values.push(QueryValue::Str(v));
+        }
+        values.push(QueryValue::Int(self.item.id.get()));
+        (sql, values)
+    }
+
+    fn generate_upsert_item_property(&self, value: &Value) -> String {
+        self.query.upsert_execution_property(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct PutContextQueryGenerator {
+    pub query: Query,
+    pub item: Context,
+}
+
+impl PutItemQueryGenerator for PutContextQueryGenerator {
+    const TYPE_KIND: TypeKind = TypeKind::Context;
+
+    fn item_id(&self) -> Id {
+        self.item.id
+    }
+
+    fn type_id(&self) -> Id {
+        self.item.type_id
+    }
+
+    fn item_properties(&self) -> &BTreeMap<String, Value> {
+        &self.item.properties
+    }
+
+    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+        &self.item.custom_properties
+    }
+
+    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
+        let values = vec![
+            QueryValue::Int(self.item.type_id.get()),
+            QueryValue::Str(&self.item.name),
+        ];
+        Some((self.query.check_context_name(true), values))
+    }
+
+    fn generate_get_type_id_query(&self) -> &'static str {
+        // TODO
+        "SELECT type_id FROM Context WHERE id = ?"
+    }
+
+    fn generate_update_item_query(&self) -> (String, Vec<QueryValue>) {
+        let sql = self.query.update_context();
+        let values = vec![
+            QueryValue::I64(self.item.create_time_since_epoch.as_millis() as i64),
+            QueryValue::I64(self.item.last_update_time_since_epoch.as_millis() as i64),
+            QueryValue::Str(&self.item.name),
+            QueryValue::Int(self.item.id.get()),
+        ];
+        (sql.to_owned(), values)
     }
 
     fn generate_upsert_item_property(&self, value: &Value) -> String {
