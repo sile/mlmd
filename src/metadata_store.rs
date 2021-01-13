@@ -257,6 +257,10 @@ impl MetadataStore {
         }
         std::mem::drop(rows);
 
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let sql = generator.generate_select_properties_sql(items.len());
         let mut query = sqlx::query_as::<_, query::Property>(&sql);
         for id in items.keys() {

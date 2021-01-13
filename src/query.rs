@@ -48,7 +48,7 @@ impl Query {
     }
 
     pub fn insert_schema_version(&self) -> &'static str {
-        "INSERT INTO MLMDEnv VALUES ($1)"
+        "INSERT INTO MLMDEnv VALUES (?)"
     }
 
     pub fn get_types(&self, options: &GetTypesOptions) -> String {
