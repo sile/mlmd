@@ -14,4 +14,5 @@ thiserror = "1"
 
 [dev-dependencies]
 async-std = { version = "1", features = ["attributes"] }
+structopt = "0.3"
 tempfile = "3"
