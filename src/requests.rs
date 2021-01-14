@@ -1,8 +1,9 @@
+use crate::errors;
 use crate::metadata::{
     Artifact, ArtifactState, ArtifactType, Context, ContextType, Event, EventStep, EventType,
     Execution, ExecutionState, ExecutionType, Id, PropertyType, Value,
 };
-use crate::metadata_store::{errors, options, MetadataStore};
+use crate::metadata_store::{options, MetadataStore};
 use crate::query;
 use std::collections::BTreeMap;
 use std::time::Duration;

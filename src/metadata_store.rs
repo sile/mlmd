@@ -1,5 +1,5 @@
-use self::errors::{GetError, InitError, PostError, PutError, PutTypeError};
 use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeOptions};
+use crate::errors::{GetError, InitError, PostError, PutError, PutTypeError};
 use crate::metadata::{
     Artifact, Context, Event, EventStep, EventType, Execution, Id, PropertyType, Value,
 };
@@ -11,7 +11,6 @@ use sqlx::{AnyConnection, Connection as _, Row as _};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-pub mod errors;
 pub mod options;
 #[cfg(test)]
 mod tests;
