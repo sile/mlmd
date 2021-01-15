@@ -1,5 +1,5 @@
 use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeOptions};
-use crate::errors::{GetError, InitError, PostError, PutError, PutTypeError};
+use crate::errors::{GetError, InitError, PostError, PutError};
 use crate::metadata::{
     Artifact, Context, Event, EventStep, EventType, Execution, Id, PropertyType, Value,
 };
@@ -73,10 +73,17 @@ impl MetadataStore {
         let property_types = self
             .get_type_properties(T::TYPE_KIND, type_id)
             .await?
-            .ok_or_else(|| PostError::TypeNotFound)?;
+            .ok_or_else(|| PostError::TypeNotFound {
+                type_kind: T::TYPE_KIND,
+                type_id,
+            })?;
         for (name, value) in generator.item_properties() {
             if property_types.get(name).copied() != Some(value.ty()) {
-                return Err(PostError::UndefinedProperty);
+                return Err(PostError::UndefinedProperty {
+                    type_kind: T::TYPE_KIND,
+                    type_id,
+                    property_name: name.clone(),
+                });
             }
         }
 
@@ -89,7 +96,10 @@ impl MetadataStore {
                 .fetch_one(&mut connection)
                 .await?;
             if count > 0 {
-                return Err(PostError::NameConflict);
+                return Err(PostError::NameAlreadyExists {
+                    type_kind: T::TYPE_KIND,
+                    item_name: generator.item_name().expect("bug").to_owned(),
+                });
             }
         }
 
@@ -165,25 +175,32 @@ impl MetadataStore {
         let property_types = self
             .get_type_properties(T::TYPE_KIND, type_id)
             .await?
-            .ok_or_else(|| PutError::TypeNotFound)?;
+            .ok_or_else(|| PutError::TypeNotFound {
+                type_kind: T::TYPE_KIND,
+                type_id,
+                item_id,
+            })?;
         for (name, value) in generator.item_properties() {
             if property_types.get(name).copied() != Some(value.ty()) {
-                return Err(PutError::UndefinedProperty);
+                return Err(PutError::UndefinedProperty {
+                    type_kind: T::TYPE_KIND,
+                    item_id,
+                    property_name: name.clone(),
+                });
             }
         }
 
-        let current_type_id: Option<i32> =
-            sqlx::query_scalar(generator.generate_get_type_id_query())
-                .bind(item_id.get())
-                .fetch_optional(&mut self.connection)
-                .await?;
-        match current_type_id {
-            None => return Err(PutError::NotFound),
-            Some(id) => {
-                if id != type_id.get() {
-                    return Err(PutError::WrongTypeId);
-                }
-            }
+        let current_type_id: i32 = sqlx::query_scalar(generator.generate_get_type_id_query())
+            .bind(item_id.get())
+            .fetch_one(&mut self.connection)
+            .await?;
+        if current_type_id != type_id.get() {
+            return Err(PutError::TypeMismatch {
+                type_kind: T::TYPE_KIND,
+                current_type_id: Id::new(current_type_id),
+                new_type_id: type_id,
+                item_id,
+            });
         }
 
         let mut connection = self.connection.begin().await?;
@@ -195,7 +212,11 @@ impl MetadataStore {
                 .fetch_one(&mut connection)
                 .await?;
             if count > 0 {
-                return Err(PutError::NameConflict);
+                return Err(PutError::NameAlreadyExists {
+                    type_kind: T::TYPE_KIND,
+                    item_id,
+                    item_name: generator.item_name().expect("bug").to_owned(),
+                });
             }
         }
 
@@ -320,7 +341,10 @@ impl MetadataStore {
             .fetch_one(&mut self.connection)
             .await?;
         if count == 0 {
-            return Err(PutError::NotFound);
+            return Err(PutError::NotFound {
+                type_kind: TypeKind::Context,
+                item_id: context_id,
+            });
         }
 
         let count: i32 = sqlx::query_scalar(if is_attribution {
@@ -332,7 +356,12 @@ impl MetadataStore {
         .fetch_one(&mut self.connection)
         .await?;
         if count == 0 {
-            return Err(PutError::NotFound);
+            let type_kind = if is_attribution {
+                TypeKind::Artifact
+            } else {
+                TypeKind::Execution
+            };
+            return Err(PutError::NotFound { type_kind, item_id });
         }
 
         sqlx::query(if is_attribution {
@@ -368,6 +397,7 @@ impl MetadataStore {
         requests::PutEventRequest::new(self, execution_id, artifact_id)
     }
 
+    // TODO: rename
     pub(crate) async fn execute_put_event(
         &mut self,
         execution_id: Id,
@@ -379,7 +409,10 @@ impl MetadataStore {
             .fetch_one(&mut self.connection)
             .await?;
         if count == 0 {
-            return Err(PutError::NotFound);
+            return Err(PutError::NotFound {
+                type_kind: TypeKind::Execution,
+                item_id: execution_id,
+            });
         }
 
         let count: i32 = sqlx::query_scalar(self.query.check_artifact_id())
@@ -387,7 +420,10 @@ impl MetadataStore {
             .fetch_one(&mut self.connection)
             .await?;
         if count == 0 {
-            return Err(PutError::NotFound);
+            return Err(PutError::NotFound {
+                type_kind: TypeKind::Artifact,
+                item_id: artifact_id,
+            });
         }
 
         let mut connection = self.connection.begin().await?;
@@ -518,7 +554,7 @@ impl MetadataStore {
         type_kind: TypeKind,
         type_name: &str,
         mut options: PutTypeOptions,
-    ) -> Result<Id, PutTypeError> {
+    ) -> Result<Id, PutError> {
         let mut connection = self.connection.begin().await?;
         let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
             .bind(type_kind as i32)
@@ -538,17 +574,17 @@ impl MetadataStore {
                     None if options.can_omit_fields => {}
                     Some(v) if v as i32 == property.data_type => {}
                     _ => {
-                        return Err(PutTypeError::AlreadyExists {
-                            kind: type_kind.as_str(),
-                            name: type_name.to_owned(),
+                        return Err(PutError::TypeAlreadyExists {
+                            type_kind,
+                            type_name: type_name.to_owned(),
                         });
                     }
                 }
             }
             if !options.properties.is_empty() && !options.can_add_fields {
-                return Err(PutTypeError::AlreadyExists {
-                    kind: type_kind.as_str(),
-                    name: type_name.to_owned(),
+                return Err(PutError::TypeAlreadyExists {
+                    type_kind,
+                    type_name: type_name.to_owned(),
                 });
             }
 

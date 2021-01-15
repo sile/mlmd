@@ -15,6 +15,12 @@ impl Id {
     }
 }
 
+impl std::fmt::Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropertyType {
     Unknown = 0,
@@ -24,34 +30,17 @@ pub enum PropertyType {
 }
 
 impl PropertyType {
-    pub fn from_i32(value: i32) -> Result<Self, ConvertError> {
+    pub fn from_i32(value: i32) -> Result<Self, sqlx::Error> {
         match value {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::Int),
             2 => Ok(Self::Double),
             3 => Ok(Self::String),
-            _ => Err(ConvertError::UndefinedPropertyType { value }),
+            _ => Err(sqlx::Error::Decode(
+                anyhow::anyhow!("property type {} is undefined", value).into(),
+            )),
         }
     }
-}
-
-// TODO: delete
-#[derive(Debug, thiserror::Error)]
-pub enum ConvertError {
-    #[error("artifact state {value} is undefined")]
-    UndefinedArtifactState { value: i32 },
-
-    #[error("execution state {value} is undefined")]
-    UndefinedExecutionState { value: i32 },
-
-    #[error("property type {value} is undefined")]
-    UndefinedPropertyType { value: i32 },
-
-    #[error("event type {value} is undefined")]
-    UndefinedEventType { value: i32 },
-
-    #[error("wrong property value")]
-    WrongPropertyValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -329,7 +318,7 @@ pub enum EventType {
 }
 
 impl EventType {
-    pub fn from_i32(v: i32) -> Result<Self, ConvertError> {
+    pub fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
         match v {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::DeclaredOutput),
@@ -338,7 +327,9 @@ impl EventType {
             4 => Ok(Self::Output),
             5 => Ok(Self::InternalInput),
             6 => Ok(Self::InternalOutput),
-            _ => Err(ConvertError::UndefinedEventType { value: v }),
+            _ => Err(sqlx::Error::Decode(
+                anyhow::anyhow!("event type {} is undefined", v).into(),
+            )),
         }
     }
 }

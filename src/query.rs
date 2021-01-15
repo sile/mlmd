@@ -1,5 +1,5 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, Artifact, Context, ConvertError, EventStep, Execution, Id, Value};
+use crate::metadata::{self, Artifact, Context, EventStep, Execution, Id, Value};
 use crate::metadata_store::options::{
     self, GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
     GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
@@ -973,19 +973,19 @@ pub struct TypeProperty {
     pub data_type: i32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Execution = 0,
     Artifact = 1,
     Context = 2,
 }
 
-impl TypeKind {
-    pub fn as_str(&self) -> &'static str {
+impl std::fmt::Display for TypeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Execution => "execution",
-            Self::Artifact => "artifact",
-            Self::Context => "context",
+            Self::Execution => write!(f, "execution"),
+            Self::Artifact => write!(f, "artifact"),
+            Self::Context => write!(f, "context"),
         }
     }
 }
@@ -1046,7 +1046,7 @@ pub struct Property {
 }
 
 impl Property {
-    pub fn into_name_and_vaue(self) -> Result<(String, Value), ConvertError> {
+    pub fn into_name_and_vaue(self) -> Result<(String, Value), sqlx::Error> {
         match self {
             Self {
                 name,
@@ -1069,7 +1069,9 @@ impl Property {
                 string_value: Some(v),
                 ..
             } => Ok((name, Value::String(v))),
-            _ => Err(ConvertError::WrongPropertyValue),
+            _ => Err(sqlx::Error::Decode(
+                anyhow::anyhow!("a property must have just one value: {:?}", self).into(),
+            )),
         }
     }
 }
@@ -1174,6 +1176,7 @@ impl GetItemsQueryGenerator for GetContextsQueryGenerator {
 pub trait PostItemQueryGenerator {
     const TYPE_KIND: TypeKind;
 
+    fn item_name(&self) -> Option<&str>;
     fn item_properties(&self) -> &BTreeMap<String, Value>;
     fn item_custom_properties(&self) -> &BTreeMap<String, Value>;
     fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
@@ -1191,6 +1194,10 @@ pub struct PostArtifactQueryGenerator {
 
 impl PostItemQueryGenerator for PostArtifactQueryGenerator {
     const TYPE_KIND: TypeKind = TypeKind::Artifact;
+
+    fn item_name(&self) -> Option<&str> {
+        self.options.name.as_ref().map(|n| n.as_str())
+    }
 
     fn item_properties(&self) -> &BTreeMap<String, Value> {
         &self.options.properties
@@ -1245,6 +1252,10 @@ pub struct PostExecutionQueryGenerator {
 impl PostItemQueryGenerator for PostExecutionQueryGenerator {
     const TYPE_KIND: TypeKind = TypeKind::Execution;
 
+    fn item_name(&self) -> Option<&str> {
+        self.options.name.as_ref().map(|n| n.as_str())
+    }
+
     fn item_properties(&self) -> &BTreeMap<String, Value> {
         &self.options.properties
     }
@@ -1296,6 +1307,10 @@ pub struct PostContextQueryGenerator {
 impl PostItemQueryGenerator for PostContextQueryGenerator {
     const TYPE_KIND: TypeKind = TypeKind::Context;
 
+    fn item_name(&self) -> Option<&str> {
+        Some(self.name.as_str())
+    }
+
     fn item_properties(&self) -> &BTreeMap<String, Value> {
         &self.options.properties
     }
@@ -1337,6 +1352,7 @@ pub trait PutItemQueryGenerator {
 
     fn item_id(&self) -> Id;
     fn type_id(&self) -> Id;
+    fn item_name(&self) -> Option<&str>;
     fn item_properties(&self) -> &BTreeMap<String, Value>;
     fn item_custom_properties(&self) -> &BTreeMap<String, Value>;
     fn generate_get_type_id_query(&self) -> &'static str;
@@ -1360,6 +1376,10 @@ impl PutItemQueryGenerator for PutArtifactQueryGenerator {
 
     fn type_id(&self) -> Id {
         self.item.type_id
+    }
+
+    fn item_name(&self) -> Option<&str> {
+        self.item.name.as_ref().map(|n| n.as_str())
     }
 
     fn item_properties(&self) -> &BTreeMap<String, Value> {
@@ -1426,6 +1446,10 @@ impl PutItemQueryGenerator for PutExecutionQueryGenerator {
         self.item.type_id
     }
 
+    fn item_name(&self) -> Option<&str> {
+        self.item.name.as_ref().map(|n| n.as_str())
+    }
+
     fn item_properties(&self) -> &BTreeMap<String, Value> {
         &self.item.properties
     }
@@ -1485,6 +1509,10 @@ impl PutItemQueryGenerator for PutContextQueryGenerator {
 
     fn type_id(&self) -> Id {
         self.item.type_id
+    }
+
+    fn item_name(&self) -> Option<&str> {
+        Some(self.item.name.as_str())
     }
 
     fn item_properties(&self) -> &BTreeMap<String, Value> {

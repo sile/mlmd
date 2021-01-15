@@ -44,7 +44,7 @@ impl<'a> PutArtifactTypeRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PutTypeError> {
+    pub async fn execute(self) -> Result<Id, errors::PutError> {
         self.store
             .put_type(query::TypeKind::Artifact, &self.type_name, self.options)
             .await
@@ -131,7 +131,7 @@ impl<'a> PutExecutionTypeRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PutTypeError> {
+    pub async fn execute(self) -> Result<Id, errors::PutError> {
         self.store
             .put_type(query::TypeKind::Execution, &self.type_name, self.options)
             .await
@@ -218,7 +218,7 @@ impl<'a> PutContextTypeRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PutTypeError> {
+    pub async fn execute(self) -> Result<Id, errors::PutError> {
         self.store
             .put_type(query::TypeKind::Context, &self.type_name, self.options)
             .await

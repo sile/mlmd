@@ -32,7 +32,7 @@ async fn put_artifact_type_works() -> anyhow::Result<()> {
             .property("p0", PropertyType::Double)
             .execute()
             .await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
 
     assert!(matches!(
@@ -42,7 +42,7 @@ async fn put_artifact_type_works() -> anyhow::Result<()> {
             .property("p1", PropertyType::String)
             .execute()
             .await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
     store
         .put_artifact_type("t0")
@@ -54,7 +54,7 @@ async fn put_artifact_type_works() -> anyhow::Result<()> {
 
     assert!(matches!(
         store.put_artifact_type("t0").execute().await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
     store
         .put_artifact_type("t0")
@@ -200,7 +200,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
             .execute()
             .await
             .err(),
-        Some(PostError::NameConflict)
+        Some(PostError::NameAlreadyExists { .. })
     ));
 
     Ok(())
@@ -317,7 +317,7 @@ async fn post_execution_works() -> anyhow::Result<()> {
             .execute()
             .await
             .err(),
-        Some(PostError::NameConflict)
+        Some(PostError::NameAlreadyExists { .. })
     ));
 
     Ok(())
@@ -340,7 +340,7 @@ async fn put_execution_type_works() -> anyhow::Result<()> {
             .property("p0", PropertyType::Double)
             .execute()
             .await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
 
     assert!(matches!(
@@ -350,7 +350,7 @@ async fn put_execution_type_works() -> anyhow::Result<()> {
             .property("p1", PropertyType::String)
             .execute()
             .await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
     store
         .put_execution_type("t0")
@@ -362,7 +362,7 @@ async fn put_execution_type_works() -> anyhow::Result<()> {
 
     assert!(matches!(
         store.put_execution_type("t0").execute().await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
     store
         .put_execution_type("t0")
@@ -510,7 +510,7 @@ async fn post_context_works() -> anyhow::Result<()> {
     store.post_context(type_id, "foo").execute().await?;
     assert!(matches!(
         store.post_context(type_id, "foo").execute().await.err(),
-        Some(PostError::NameConflict)
+        Some(PostError::NameAlreadyExists { .. })
     ));
 
     Ok(())
@@ -533,7 +533,7 @@ async fn put_context_type_works() -> anyhow::Result<()> {
             .property("p0", PropertyType::Double)
             .execute()
             .await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
 
     assert!(matches!(
@@ -543,7 +543,7 @@ async fn put_context_type_works() -> anyhow::Result<()> {
             .property("p1", PropertyType::String)
             .execute()
             .await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
     store
         .put_context_type("t0")
@@ -555,7 +555,7 @@ async fn put_context_type_works() -> anyhow::Result<()> {
 
     assert!(matches!(
         store.put_context_type("t0").execute().await,
-        Err(PutTypeError::AlreadyExists { .. })
+        Err(PutError::TypeAlreadyExists { .. })
     ));
     store
         .put_context_type("t0")
