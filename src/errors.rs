@@ -59,6 +59,7 @@ pub enum PutError {
     #[error("{type_kind} {item_id} is not found")]
     NotFound { type_kind: TypeKind, item_id: Id },
 
+    // TODO: delete
     #[error(
         "cannot change the type of {type_kind} {item_id} from {current_type_id} to {new_type_id}"
     )]

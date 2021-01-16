@@ -21,6 +21,8 @@ impl std::fmt::Display for Id {
     }
 }
 
+// TODO: Add `PropertyTypes` and `PropertyValues`
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropertyType {
     // TODO: Unknown = 0,

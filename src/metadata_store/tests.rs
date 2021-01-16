@@ -1,6 +1,7 @@
 use super::*;
 use crate::metadata::{
-    ArtifactState, ArtifactType, ContextType, ExecutionState, ExecutionType, PropertyValue,
+    Artifact, ArtifactState, ArtifactType, Context, ContextType, Execution, ExecutionState,
+    ExecutionType, PropertyValue,
 };
 use tempfile::NamedTempFile;
 
@@ -221,13 +222,20 @@ async fn put_artifact_works() -> anyhow::Result<()> {
     artifact
         .custom_properties
         .insert("bar".to_string(), PropertyValue::Int(10));
-    store.put_artifact(&artifact).execute().await?;
+    store
+        .put_artifact(artifact.id)
+        .name(artifact.name.as_ref().unwrap().as_str())
+        .state(artifact.state)
+        .properties(artifact.properties.clone())
+        .custom_properties(artifact.custom_properties.clone())
+        .execute()
+        .await?;
 
-    assert_eq!(store.get_artifacts().execute().await?.len(), 2);
-    assert_eq!(
-        store.get_artifacts().id(artifact.id).execute().await?,
-        vec![artifact]
-    );
+    let artifacts = store.get_artifacts().id(artifact.id).execute().await?;
+    assert_eq!(artifacts.len(), 1);
+
+    artifact.last_update_time_since_epoch = artifacts[0].last_update_time_since_epoch;
+    assert_eq!(artifacts[0], artifact);
 
     Ok(())
 }
@@ -276,13 +284,19 @@ async fn put_execution_works() -> anyhow::Result<()> {
     execution
         .custom_properties
         .insert("bar".to_string(), PropertyValue::Int(10));
-    store.put_execution(&execution).execute().await?;
+    store
+        .put_execution(execution.id)
+        .name(execution.name.as_ref().unwrap())
+        .last_known_state(execution.last_known_state)
+        .custom_properties(execution.custom_properties.clone())
+        .execute()
+        .await?;
 
-    assert_eq!(store.get_executions().execute().await?.len(), 1);
-    assert_eq!(
-        store.get_executions().id(execution.id).execute().await?,
-        vec![execution]
-    );
+    let executions = store.get_executions().execute().await?;
+    assert_eq!(executions.len(), 1);
+
+    execution.last_update_time_since_epoch = executions[0].last_update_time_since_epoch;
+    assert_eq!(executions[0], execution);
 
     Ok(())
 }
@@ -479,13 +493,18 @@ async fn put_context_works() -> anyhow::Result<()> {
     context
         .custom_properties
         .insert("bar".to_string(), PropertyValue::Int(10));
-    store.put_context(&context).execute().await?;
+    store
+        .put_context(context.id)
+        .name(&context.name)
+        .custom_properties(context.custom_properties.clone())
+        .execute()
+        .await?;
 
-    assert_eq!(store.get_contexts().execute().await?.len(), 1);
-    assert_eq!(
-        store.get_contexts().id(context.id).execute().await?,
-        vec![context]
-    );
+    let contexts = store.get_contexts().execute().await?;
+    assert_eq!(contexts.len(), 1);
+
+    context.last_update_time_since_epoch = contexts[0].last_update_time_since_epoch;
+    assert_eq!(contexts[0], context);
 
     Ok(())
 }

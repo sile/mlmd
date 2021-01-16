@@ -74,14 +74,11 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     println!("Mark the execution as completed");
-    let mut execution = store // TODO
-        .get_executions()
-        .id(trainer_run_id)
+    store
+        .put_execution(trainer_run_id)
+        .last_known_state(ExecutionState::Complete)
         .execute()
-        .await?
-        .swap_remove(0);
-    execution.last_known_state = ExecutionState::Complete;
-    store.put_execution(&execution).execute().await?;
+        .await?;
 
     println!("Create a ContextType, e.g., Experiment with a note property");
     let experiment_type_id = store

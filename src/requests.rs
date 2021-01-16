@@ -650,60 +650,189 @@ impl<'a> PostContextRequest<'a> {
 #[derive(Debug)]
 pub struct PutArtifactRequest<'a> {
     store: &'a mut MetadataStore,
-    item: Artifact,
+    id: Id,
+    options: options::ArtifactOptions,
 }
 
 impl<'a> PutArtifactRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, item: Artifact) -> Self {
-        Self { store, item }
+    pub(crate) fn new(store: &'a mut MetadataStore, id: Id) -> Self {
+        Self {
+            store,
+            id,
+            options: Default::default(),
+        }
+    }
+
+    pub fn name(mut self, name: &str) -> Self {
+        self.options.name = Some(name.to_owned());
+        self
+    }
+
+    pub fn uri(mut self, uri: &str) -> Self {
+        self.options.uri = Some(uri.to_owned());
+        self
+    }
+
+    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+        self.options.properties = properties;
+        self
+    }
+
+    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+        self.options.custom_properties = properties;
+        self
+    }
+
+    pub fn property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<PropertyValue>,
+    {
+        self.options.properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<PropertyValue>,
+    {
+        self.options
+            .custom_properties
+            .insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn state(mut self, state: ArtifactState) -> Self {
+        self.options.state = Some(state);
+        self
     }
 
     pub async fn execute(self) -> Result<(), errors::PutError> {
         let generator = query::PutArtifactQueryGenerator {
             query: self.store.query.clone(),
-            item: self.item,
+            options: self.options,
         };
-        self.store.put_item(generator).await
+        self.store.put_item(self.id, generator).await
     }
 }
 
 #[derive(Debug)]
 pub struct PutExecutionRequest<'a> {
     store: &'a mut MetadataStore,
-    item: Execution,
+    id: Id,
+    options: options::ExecutionOptions,
 }
 
 impl<'a> PutExecutionRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, item: Execution) -> Self {
-        Self { store, item }
+    pub(crate) fn new(store: &'a mut MetadataStore, id: Id) -> Self {
+        Self {
+            store,
+            id,
+            options: Default::default(),
+        }
+    }
+
+    pub fn name(mut self, name: &str) -> Self {
+        self.options.name = Some(name.to_owned());
+        self
+    }
+
+    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+        self.options.properties = properties;
+        self
+    }
+
+    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+        self.options.custom_properties = properties;
+        self
+    }
+
+    pub fn property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<PropertyValue>,
+    {
+        self.options.properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<PropertyValue>,
+    {
+        self.options
+            .custom_properties
+            .insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn last_known_state(mut self, state: ExecutionState) -> Self {
+        self.options.last_known_state = Some(state);
+        self
     }
 
     pub async fn execute(self) -> Result<(), errors::PutError> {
         let generator = query::PutExecutionQueryGenerator {
             query: self.store.query.clone(),
-            item: self.item,
+            options: self.options,
         };
-        self.store.put_item(generator).await
+        self.store.put_item(self.id, generator).await
     }
 }
 
 #[derive(Debug)]
 pub struct PutContextRequest<'a> {
     store: &'a mut MetadataStore,
-    item: Context,
+    id: Id,
+    options: options::ContextOptions,
 }
 
 impl<'a> PutContextRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, item: Context) -> Self {
-        Self { store, item }
+    pub(crate) fn new(store: &'a mut MetadataStore, id: Id) -> Self {
+        Self {
+            store,
+            id,
+            options: Default::default(),
+        }
+    }
+
+    pub fn name(mut self, name: &str) -> Self {
+        self.options.name = Some(name.to_owned());
+        self
+    }
+
+    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+        self.options.properties = properties;
+        self
+    }
+
+    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+        self.options.custom_properties = properties;
+        self
+    }
+
+    pub fn property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<PropertyValue>,
+    {
+        self.options.properties.insert(key.to_owned(), value.into());
+        self
+    }
+
+    pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
+    where
+        T: Into<PropertyValue>,
+    {
+        self.options
+            .custom_properties
+            .insert(key.to_owned(), value.into());
+        self
     }
 
     pub async fn execute(self) -> Result<(), errors::PutError> {
         let generator = query::PutContextQueryGenerator {
             query: self.store.query.clone(),
-            item: self.item,
+            options: self.options,
         };
-        self.store.put_item(generator).await
+        self.store.put_item(self.id, generator).await
     }
 }
 

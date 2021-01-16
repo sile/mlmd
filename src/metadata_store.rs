@@ -1,8 +1,6 @@
 use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeOptions};
 use crate::errors::{GetError, InitError, PostError, PutError};
-use crate::metadata::{
-    Artifact, Context, Event, EventStep, EventType, Execution, Id, PropertyType, PropertyValue,
-};
+use crate::metadata::{Event, EventStep, EventType, Id, PropertyType, PropertyValue};
 use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query, TypeKind};
 use crate::requests;
 use futures::TryStreamExt as _;
@@ -166,12 +164,20 @@ impl MetadataStore {
             .nth(0))
     }
 
-    pub(crate) async fn put_item<T>(&mut self, generator: T) -> Result<(), PutError>
+    pub(crate) async fn put_item<T>(&mut self, item_id: Id, generator: T) -> Result<(), PutError>
     where
         T: query::PutItemQueryGenerator,
     {
-        let item_id = generator.item_id();
-        let type_id = generator.type_id();
+        let type_id = sqlx::query_scalar(generator.generate_get_type_id_query())
+            .bind(item_id.get())
+            .fetch_optional(&mut self.connection)
+            .await?
+            .map(Id::new)
+            .ok_or_else(|| PutError::NotFound {
+                type_kind: T::TYPE_KIND,
+                item_id,
+            })?;
+
         let property_types = self
             .get_type_properties(T::TYPE_KIND, type_id)
             .await?
@@ -191,22 +197,9 @@ impl MetadataStore {
             }
         }
 
-        let current_type_id: i32 = sqlx::query_scalar(generator.generate_get_type_id_query())
-            .bind(item_id.get())
-            .fetch_one(&mut self.connection)
-            .await?;
-        if current_type_id != type_id.get() {
-            return Err(PutError::TypeMismatch {
-                type_kind: T::TYPE_KIND,
-                current_type_id: Id::new(current_type_id),
-                new_type_id: type_id,
-                item_id,
-            });
-        }
-
         let mut connection = self.connection.begin().await?;
 
-        if let Some((sql, values)) = generator.generate_check_item_name_query() {
+        if let Some((sql, values)) = generator.generate_check_item_name_query(type_id) {
             let count: i32 = values
                 .into_iter()
                 .fold(sqlx::query_scalar(&sql), |q, v| v.bind_scalar(q))
@@ -221,7 +214,7 @@ impl MetadataStore {
             }
         }
 
-        let (sql, values) = generator.generate_update_item_query();
+        let (sql, values) = generator.generate_update_item_query(item_id);
         values
             .into_iter()
             .fold(sqlx::query(&sql), |q, v| v.bind(q))
@@ -256,9 +249,8 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub fn put_artifact(&mut self, artifact: &Artifact) -> requests::PutArtifactRequest {
-        // TODO: remove clone
-        requests::PutArtifactRequest::new(self, artifact.clone())
+    pub fn put_artifact(&mut self, artifact_id: Id) -> requests::PutArtifactRequest {
+        requests::PutArtifactRequest::new(self, artifact_id)
     }
 
     pub(crate) async fn get_items<T>(&mut self, generator: T) -> Result<Vec<T::Item>, GetError>
@@ -305,9 +297,8 @@ impl MetadataStore {
         requests::PostExecutionRequest::new(self, type_id)
     }
 
-    pub fn put_execution(&mut self, execution: &Execution) -> requests::PutExecutionRequest {
-        // TODO: remove clone
-        requests::PutExecutionRequest::new(self, execution.clone())
+    pub fn put_execution(&mut self, execution_id: Id) -> requests::PutExecutionRequest {
+        requests::PutExecutionRequest::new(self, execution_id)
     }
 
     pub fn get_executions(&mut self) -> requests::GetExecutionsRequest {
@@ -322,9 +313,8 @@ impl MetadataStore {
         requests::PostContextRequest::new(self, type_id, context_name)
     }
 
-    pub fn put_context(&mut self, context: &Context) -> requests::PutContextRequest {
-        // TODO: remove clone
-        requests::PutContextRequest::new(self, context.clone())
+    pub fn put_context(&mut self, context_id: Id) -> requests::PutContextRequest {
+        requests::PutContextRequest::new(self, context_id)
     }
 
     pub fn get_contexts(&mut self) -> requests::GetContextsRequest {

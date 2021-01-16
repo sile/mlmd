@@ -1,11 +1,12 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, Artifact, Context, EventStep, Execution, Id, PropertyValue};
+use crate::metadata::{self, EventStep, Id, PropertyValue};
 use crate::metadata_store::options::{
     self, GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
     GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
 };
 use sqlx::database::HasArguments;
 use std::collections::BTreeMap;
+use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone)]
 pub enum Query {
@@ -127,21 +128,6 @@ impl Query {
         }
 
         format!("INSERT INTO Artifact ({}) VALUES ({})", fields, values)
-    }
-
-    pub fn update_artifact(&self, artifact: &metadata::Artifact) -> String {
-        // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
-        // we can use a static UPDATE statement.
-        let mut fields =
-            "state=?, create_time_since_epoch=?, last_update_time_since_epoch=?".to_owned();
-        if artifact.name.is_some() {
-            fields += ", name=?";
-        }
-        if artifact.uri.is_some() {
-            fields += ", uri=?";
-        }
-
-        format!("UPDATE Artifact SET {} WHERE id=?", fields)
     }
 
     pub fn upsert_artifact_property(&self, value: &PropertyValue) -> String {
@@ -284,19 +270,6 @@ impl Query {
         format!("INSERT INTO Execution ({}) VALUES ({})", fields, values)
     }
 
-    pub fn update_execution(&self, execution: &metadata::Execution) -> String {
-        // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
-        // we can use a static UPDATE statement.
-        let mut fields =
-            "last_known_state=?, create_time_since_epoch=?, last_update_time_since_epoch=?"
-                .to_owned();
-        if execution.name.is_some() {
-            fields += ", name=?";
-        }
-
-        format!("UPDATE Execution SET {} WHERE id=?", fields)
-    }
-
     pub fn upsert_execution_property(&self, value: &PropertyValue) -> String {
         match self {
             Self::Sqlite(x) => x.upsert_execution_property(value),
@@ -383,14 +356,6 @@ impl Query {
             "INSERT INTO Context ",
             "(type_id, create_time_since_epoch, last_update_time_since_epoch, name) ",
             "VALUES (?, ?, ?, ?)"
-        )
-    }
-
-    pub fn update_context(&self) -> &'static str {
-        concat!(
-            "UPDATE Context SET ",
-            "create_time_since_epoch=?, last_update_time_since_epoch=?, name=? ",
-            "WHERE id=?"
         )
     }
 
@@ -1350,52 +1315,45 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
 pub trait PutItemQueryGenerator {
     const TYPE_KIND: TypeKind;
 
-    fn item_id(&self) -> Id;
-    fn type_id(&self) -> Id;
     fn item_name(&self) -> Option<&str>;
     fn item_properties(&self) -> &BTreeMap<String, PropertyValue>;
     fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue>;
     fn generate_get_type_id_query(&self) -> &'static str;
-    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
-    fn generate_update_item_query(&self) -> (String, Vec<QueryValue>);
+    fn generate_check_item_name_query(
+        &self,
+        type_id: Id,
+    ) -> Option<(&'static str, Vec<QueryValue>)>;
+    fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>);
     fn generate_upsert_item_property(&self, value: &PropertyValue) -> String;
 }
 
 #[derive(Debug)]
 pub struct PutArtifactQueryGenerator {
     pub query: Query,
-    pub item: Artifact,
+    pub options: options::ArtifactOptions,
 }
 
 impl PutItemQueryGenerator for PutArtifactQueryGenerator {
     const TYPE_KIND: TypeKind = TypeKind::Artifact;
 
-    fn item_id(&self) -> Id {
-        self.item.id
-    }
-
-    fn type_id(&self) -> Id {
-        self.item.type_id
-    }
-
     fn item_name(&self) -> Option<&str> {
-        self.item.name.as_ref().map(|n| n.as_str())
+        self.options.name.as_ref().map(|n| n.as_str())
     }
 
     fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
-        &self.item.properties
+        &self.options.properties
     }
 
     fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
-        &self.item.custom_properties
+        &self.options.custom_properties
     }
 
-    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
-        if let Some(name) = &self.item.name {
-            let values = vec![
-                QueryValue::Int(self.item.type_id.get()),
-                QueryValue::Str(name),
-            ];
+    fn generate_check_item_name_query(
+        &self,
+        type_id: Id,
+    ) -> Option<(&'static str, Vec<QueryValue>)> {
+        if let Some(name) = &self.options.name {
+            let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];
             Some((self.query.check_artifact_name(true), values))
         } else {
             None
@@ -1407,20 +1365,26 @@ impl PutItemQueryGenerator for PutArtifactQueryGenerator {
         "SELECT type_id FROM Artifact WHERE id = ?"
     }
 
-    fn generate_update_item_query(&self) -> (String, Vec<QueryValue>) {
-        let sql = self.query.update_artifact(&self.item);
-        let mut values = vec![
-            QueryValue::Int(self.item.state as i32),
-            QueryValue::I64(self.item.create_time_since_epoch.as_millis() as i64),
-            QueryValue::I64(self.item.last_update_time_since_epoch.as_millis() as i64),
-        ];
-        if let Some(v) = &self.item.name {
+    fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>) {
+        let mut fields = "last_update_time_since_epoch=?".to_owned();
+        let mut values = vec![QueryValue::I64(current_millis())];
+
+        if let Some(v) = self.options.state {
+            fields += ", state=?";
+            values.push(QueryValue::Int(v as i32));
+        }
+        if let Some(v) = &self.options.name {
+            fields += ", name=?";
             values.push(QueryValue::Str(v));
         }
-        if let Some(v) = &self.item.uri {
+        if let Some(v) = &self.options.uri {
+            fields += ", uri=?";
             values.push(QueryValue::Str(v));
         }
-        values.push(QueryValue::Int(self.item.id.get()));
+
+        let sql = format!("UPDATE Artifact SET {} WHERE id=?", fields);
+        values.push(QueryValue::Int(item_id.get()));
+
         (sql, values)
     }
 
@@ -1429,41 +1393,37 @@ impl PutItemQueryGenerator for PutArtifactQueryGenerator {
     }
 }
 
+fn current_millis() -> i64 {
+    UNIX_EPOCH.elapsed().unwrap_or_default().as_millis() as i64
+}
+
 #[derive(Debug)]
 pub struct PutExecutionQueryGenerator {
     pub query: Query,
-    pub item: Execution,
+    pub options: options::ExecutionOptions,
 }
 
 impl PutItemQueryGenerator for PutExecutionQueryGenerator {
     const TYPE_KIND: TypeKind = TypeKind::Execution;
 
-    fn item_id(&self) -> Id {
-        self.item.id
-    }
-
-    fn type_id(&self) -> Id {
-        self.item.type_id
-    }
-
     fn item_name(&self) -> Option<&str> {
-        self.item.name.as_ref().map(|n| n.as_str())
+        self.options.name.as_ref().map(|n| n.as_str())
     }
 
     fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
-        &self.item.properties
+        &self.options.properties
     }
 
     fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
-        &self.item.custom_properties
+        &self.options.custom_properties
     }
 
-    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
-        if let Some(name) = &self.item.name {
-            let values = vec![
-                QueryValue::Int(self.item.type_id.get()),
-                QueryValue::Str(name),
-            ];
+    fn generate_check_item_name_query(
+        &self,
+        type_id: Id,
+    ) -> Option<(&'static str, Vec<QueryValue>)> {
+        if let Some(name) = &self.options.name {
+            let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];
             Some((self.query.check_execution_name(true), values))
         } else {
             None
@@ -1475,17 +1435,21 @@ impl PutItemQueryGenerator for PutExecutionQueryGenerator {
         "SELECT type_id FROM Execution WHERE id = ?"
     }
 
-    fn generate_update_item_query(&self) -> (String, Vec<QueryValue>) {
-        let sql = self.query.update_execution(&self.item);
-        let mut values = vec![
-            QueryValue::Int(self.item.last_known_state as i32),
-            QueryValue::I64(self.item.create_time_since_epoch.as_millis() as i64),
-            QueryValue::I64(self.item.last_update_time_since_epoch.as_millis() as i64),
-        ];
-        if let Some(v) = &self.item.name {
+    fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>) {
+        let mut fields = "last_update_time_since_epoch=?".to_owned();
+        let mut values = vec![QueryValue::I64(current_millis())];
+
+        if let Some(v) = &self.options.name {
+            fields += ", name=?";
             values.push(QueryValue::Str(v));
         }
-        values.push(QueryValue::Int(self.item.id.get()));
+        if let Some(v) = self.options.last_known_state {
+            fields += ", last_known_state=?";
+            values.push(QueryValue::Int(v as i32));
+        }
+
+        let sql = format!("UPDATE Execution SET {} WHERE id=?", fields);
+        values.push(QueryValue::Int(item_id.get()));
         (sql, values)
     }
 
@@ -1497,38 +1461,34 @@ impl PutItemQueryGenerator for PutExecutionQueryGenerator {
 #[derive(Debug)]
 pub struct PutContextQueryGenerator {
     pub query: Query,
-    pub item: Context,
+    pub options: options::ContextOptions,
 }
 
 impl PutItemQueryGenerator for PutContextQueryGenerator {
     const TYPE_KIND: TypeKind = TypeKind::Context;
 
-    fn item_id(&self) -> Id {
-        self.item.id
-    }
-
-    fn type_id(&self) -> Id {
-        self.item.type_id
-    }
-
     fn item_name(&self) -> Option<&str> {
-        Some(self.item.name.as_str())
+        self.options.name.as_ref().map(|n| n.as_str())
     }
 
     fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
-        &self.item.properties
+        &self.options.properties
     }
 
     fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
-        &self.item.custom_properties
+        &self.options.custom_properties
     }
 
-    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
-        let values = vec![
-            QueryValue::Int(self.item.type_id.get()),
-            QueryValue::Str(&self.item.name),
-        ];
-        Some((self.query.check_context_name(true), values))
+    fn generate_check_item_name_query(
+        &self,
+        type_id: Id,
+    ) -> Option<(&'static str, Vec<QueryValue>)> {
+        if let Some(name) = &self.options.name {
+            let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];
+            Some((self.query.check_context_name(true), values))
+        } else {
+            None
+        }
     }
 
     fn generate_get_type_id_query(&self) -> &'static str {
@@ -1536,14 +1496,18 @@ impl PutItemQueryGenerator for PutContextQueryGenerator {
         "SELECT type_id FROM Context WHERE id = ?"
     }
 
-    fn generate_update_item_query(&self) -> (String, Vec<QueryValue>) {
-        let sql = self.query.update_context();
-        let values = vec![
-            QueryValue::I64(self.item.create_time_since_epoch.as_millis() as i64),
-            QueryValue::I64(self.item.last_update_time_since_epoch.as_millis() as i64),
-            QueryValue::Str(&self.item.name),
-            QueryValue::Int(self.item.id.get()),
-        ];
+    fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>) {
+        let mut fields = "last_update_time_since_epoch=?".to_owned();
+        let mut values = vec![QueryValue::I64(current_millis())];
+
+        if let Some(v) = &self.options.name {
+            fields += ", name=?";
+            values.push(QueryValue::Str(v));
+        }
+
+        let sql = format!("UPDATE Context SET {} WHERE id=?", fields);
+        values.push(QueryValue::Int(item_id.get()));
+
         (sql.to_owned(), values)
     }
 

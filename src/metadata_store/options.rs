@@ -52,6 +52,15 @@ impl Default for PostArtifactOptions {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ArtifactOptions {
+    pub(crate) name: Option<String>,
+    pub(crate) uri: Option<String>,
+    pub(crate) properties: BTreeMap<String, PropertyValue>,
+    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
+    pub(crate) state: Option<ArtifactState>,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct GetArtifactsOptions {
     pub(crate) type_name: Option<String>,
@@ -133,6 +142,14 @@ impl Default for PostExecutionOptions {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ExecutionOptions {
+    pub(crate) name: Option<String>,
+    pub(crate) properties: BTreeMap<String, PropertyValue>,
+    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
+    pub(crate) last_known_state: Option<ExecutionState>,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct GetContextsOptions {
     pub(crate) type_name: Option<String>,
@@ -162,6 +179,13 @@ impl GetContextsOptions {
         }
         values
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ContextOptions {
+    pub(crate) name: Option<String>,
+    pub(crate) properties: BTreeMap<String, PropertyValue>,
+    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
 }
 
 #[derive(Debug, Clone)]
