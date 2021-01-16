@@ -3,6 +3,25 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TypeId(i32);
+
+impl TypeId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for TypeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Id(i32);
 
 impl Id {
@@ -57,14 +76,14 @@ impl std::fmt::Display for PropertyType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArtifactType {
-    pub id: Id,
+    pub id: TypeId,
     pub name: String,
     pub properties: BTreeMap<String, PropertyType>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExecutionType {
-    pub id: Id,
+    pub id: TypeId,
     pub name: String,
     pub properties: BTreeMap<String, PropertyType>,
     // TODO: input_type, output_type
@@ -72,7 +91,7 @@ pub struct ExecutionType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ContextType {
-    pub id: Id,
+    pub id: TypeId,
     pub name: String,
     pub properties: BTreeMap<String, PropertyType>,
 }

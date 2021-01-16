@@ -1,7 +1,7 @@
 use crate::errors;
 use crate::metadata::{
     Artifact, ArtifactState, ArtifactType, Context, ContextType, Event, EventStep, EventType,
-    Execution, ExecutionState, ExecutionType, Id, PropertyType, PropertyValue,
+    Execution, ExecutionState, ExecutionType, Id, PropertyType, PropertyValue, TypeId,
 };
 use crate::metadata_store::{options, MetadataStore};
 use crate::query;
@@ -44,7 +44,7 @@ impl<'a> PutArtifactTypeRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PutError> {
+    pub async fn execute(self) -> Result<TypeId, errors::PutError> {
         self.store
             .put_type(query::TypeKind::Artifact, &self.type_name, self.options)
             .await
@@ -70,12 +70,12 @@ impl<'a> GetArtifactTypesRequest<'a> {
         self
     }
 
-    pub fn id(mut self, type_id: Id) -> Self {
+    pub fn id(mut self, type_id: TypeId) -> Self {
         self.options.ids.push(type_id);
         self
     }
 
-    pub fn ids(mut self, type_ids: &[Id]) -> Self {
+    pub fn ids(mut self, type_ids: &[TypeId]) -> Self {
         self.options.ids.extend(type_ids);
         self
     }
@@ -131,7 +131,7 @@ impl<'a> PutExecutionTypeRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PutError> {
+    pub async fn execute(self) -> Result<TypeId, errors::PutError> {
         self.store
             .put_type(query::TypeKind::Execution, &self.type_name, self.options)
             .await
@@ -157,12 +157,12 @@ impl<'a> GetExecutionTypesRequest<'a> {
         self
     }
 
-    pub fn id(mut self, type_id: Id) -> Self {
+    pub fn id(mut self, type_id: TypeId) -> Self {
         self.options.ids.push(type_id);
         self
     }
 
-    pub fn ids(mut self, type_ids: &[Id]) -> Self {
+    pub fn ids(mut self, type_ids: &[TypeId]) -> Self {
         self.options.ids.extend(type_ids);
         self
     }
@@ -218,7 +218,7 @@ impl<'a> PutContextTypeRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PutError> {
+    pub async fn execute(self) -> Result<TypeId, errors::PutError> {
         self.store
             .put_type(query::TypeKind::Context, &self.type_name, self.options)
             .await
@@ -244,12 +244,12 @@ impl<'a> GetContextTypesRequest<'a> {
         self
     }
 
-    pub fn id(mut self, type_id: Id) -> Self {
+    pub fn id(mut self, type_id: TypeId) -> Self {
         self.options.ids.push(type_id);
         self
     }
 
-    pub fn ids(mut self, type_ids: &[Id]) -> Self {
+    pub fn ids(mut self, type_ids: &[TypeId]) -> Self {
         self.options.ids.extend(type_ids);
         self
     }
@@ -429,12 +429,12 @@ impl<'a> GetContextsRequest<'a> {
 #[derive(Debug)]
 pub struct PostArtifactRequest<'a> {
     store: &'a mut MetadataStore,
-    type_id: Id,
+    type_id: TypeId,
     options: options::PostArtifactOptions,
 }
 
 impl<'a> PostArtifactRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, type_id: Id) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore, type_id: TypeId) -> Self {
         Self {
             store,
             type_id,
@@ -508,12 +508,12 @@ impl<'a> PostArtifactRequest<'a> {
 #[derive(Debug)]
 pub struct PostExecutionRequest<'a> {
     store: &'a mut MetadataStore,
-    type_id: Id,
+    type_id: TypeId,
     options: options::PostExecutionOptions,
 }
 
 impl<'a> PostExecutionRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, type_id: Id) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore, type_id: TypeId) -> Self {
         Self {
             store,
             type_id,
@@ -582,13 +582,13 @@ impl<'a> PostExecutionRequest<'a> {
 #[derive(Debug)]
 pub struct PostContextRequest<'a> {
     store: &'a mut MetadataStore,
-    type_id: Id,
+    type_id: TypeId,
     name: String,
     options: options::PostContextOptions,
 }
 
 impl<'a> PostContextRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, type_id: Id, context_name: &str) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore, type_id: TypeId, context_name: &str) -> Self {
         Self {
             store,
             type_id,

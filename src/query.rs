@@ -1,5 +1,5 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, EventStep, Id, PropertyValue};
+use crate::metadata::{self, EventStep, Id, PropertyValue, TypeId};
 use crate::metadata_store::options::{
     self, GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
     GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
@@ -1153,7 +1153,7 @@ pub trait PostItemQueryGenerator {
 #[derive(Debug)]
 pub struct PostArtifactQueryGenerator {
     pub query: Query,
-    pub type_id: Id,
+    pub type_id: TypeId,
     pub options: options::PostArtifactOptions,
 }
 
@@ -1210,7 +1210,7 @@ impl PostItemQueryGenerator for PostArtifactQueryGenerator {
 #[derive(Debug)]
 pub struct PostExecutionQueryGenerator {
     pub query: Query,
-    pub type_id: Id,
+    pub type_id: TypeId,
     pub options: options::PostExecutionOptions,
 }
 
@@ -1264,7 +1264,7 @@ impl PostItemQueryGenerator for PostExecutionQueryGenerator {
 #[derive(Debug)]
 pub struct PostContextQueryGenerator {
     pub query: Query,
-    pub type_id: Id,
+    pub type_id: TypeId,
     pub name: String,
     pub options: options::PostContextOptions,
 }
@@ -1321,7 +1321,7 @@ pub trait PutItemQueryGenerator {
     fn generate_get_type_id_query(&self) -> &'static str;
     fn generate_check_item_name_query(
         &self,
-        type_id: Id,
+        type_id: TypeId,
     ) -> Option<(&'static str, Vec<QueryValue>)>;
     fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>);
     fn generate_upsert_item_property(&self, value: &PropertyValue) -> String;
@@ -1350,7 +1350,7 @@ impl PutItemQueryGenerator for PutArtifactQueryGenerator {
 
     fn generate_check_item_name_query(
         &self,
-        type_id: Id,
+        type_id: TypeId,
     ) -> Option<(&'static str, Vec<QueryValue>)> {
         if let Some(name) = &self.options.name {
             let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];
@@ -1420,7 +1420,7 @@ impl PutItemQueryGenerator for PutExecutionQueryGenerator {
 
     fn generate_check_item_name_query(
         &self,
-        type_id: Id,
+        type_id: TypeId,
     ) -> Option<(&'static str, Vec<QueryValue>)> {
         if let Some(name) = &self.options.name {
             let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];
@@ -1481,7 +1481,7 @@ impl PutItemQueryGenerator for PutContextQueryGenerator {
 
     fn generate_check_item_name_query(
         &self,
-        type_id: Id,
+        type_id: TypeId,
     ) -> Option<(&'static str, Vec<QueryValue>)> {
         if let Some(name) = &self.options.name {
             let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];

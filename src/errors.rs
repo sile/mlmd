@@ -1,6 +1,6 @@
-use crate::metadata::{Id, PropertyType};
+use crate::metadata::{Id, PropertyType, TypeId};
 
-pub use crate::query::TypeKind;
+pub use crate::query::TypeKind; // TODO: move
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitError {
@@ -31,7 +31,7 @@ pub enum PutError {
     #[error("{type_kind} {item_id} has a type {type_id} that doesn't exist")]
     TypeNotFound {
         type_kind: TypeKind,
-        type_id: Id,
+        type_id: TypeId,
         item_id: Id,
     },
 
@@ -58,17 +58,6 @@ pub enum PutError {
 
     #[error("{type_kind} {item_id} is not found")]
     NotFound { type_kind: TypeKind, item_id: Id },
-
-    // TODO: delete
-    #[error(
-        "cannot change the type of {type_kind} {item_id} from {current_type_id} to {new_type_id}"
-    )]
-    TypeMismatch {
-        type_kind: TypeKind,
-        current_type_id: Id,
-        new_type_id: Id,
-        item_id: Id,
-    },
 }
 
 impl From<GetError> for PutError {
@@ -84,12 +73,15 @@ pub enum PostError {
     Db(#[from] sqlx::Error),
 
     #[error("{type_kind} type {type_id} is not found")]
-    TypeNotFound { type_kind: TypeKind, type_id: Id },
+    TypeNotFound {
+        type_kind: TypeKind,
+        type_id: TypeId,
+    },
 
     #[error("new {type_kind} with the type {type_id} has an undefined property {property_name:?}")]
     UndefinedProperty {
         type_kind: TypeKind,
-        type_id: Id,
+        type_id: TypeId,
         property_name: String,
     },
 

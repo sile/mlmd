@@ -1,5 +1,5 @@
 use crate::metadata::{
-    ArtifactState, EventStep, EventType, ExecutionState, Id, PropertyType, PropertyValue,
+    ArtifactState, EventStep, EventType, ExecutionState, Id, PropertyType, PropertyValue, TypeId,
 };
 use crate::query::QueryValue;
 use std::collections::BTreeMap;
@@ -8,11 +8,11 @@ use std::time::{Duration, UNIX_EPOCH};
 #[derive(Debug, Default, Clone)]
 pub struct GetTypesOptions {
     pub name: Option<String>,
-    pub ids: Vec<Id>,
+    pub ids: Vec<TypeId>,
 }
 
 impl GetTypesOptions {
-    pub fn by_id(id: Id) -> Self {
+    pub fn by_id(id: TypeId) -> Self {
         Self {
             name: None,
             ids: vec![id],

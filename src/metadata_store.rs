@@ -1,6 +1,6 @@
 use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeOptions};
 use crate::errors::{GetError, InitError, PostError, PutError};
-use crate::metadata::{Event, EventStep, EventType, Id, PropertyType, PropertyValue};
+use crate::metadata::{Event, EventStep, EventType, Id, PropertyType, PropertyValue, TypeId};
 use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query, TypeKind};
 use crate::requests;
 use futures::TryStreamExt as _;
@@ -63,8 +63,11 @@ impl MetadataStore {
         requests::GetContextTypesRequest::new(self)
     }
 
-    // TODO: s/type_id/type_name/
-    pub(crate) async fn post_item<T>(&mut self, type_id: Id, generator: T) -> Result<Id, PostError>
+    pub(crate) async fn post_item<T>(
+        &mut self,
+        type_id: TypeId,
+        generator: T,
+    ) -> Result<Id, PostError>
     where
         T: query::PostItemQueryGenerator,
     {
@@ -137,10 +140,7 @@ impl MetadataStore {
         Ok(Id::new(item_id))
     }
 
-    pub fn post_artifact(
-        &mut self,
-        type_id: Id, // TODO: name(?)
-    ) -> requests::PostArtifactRequest {
+    pub fn post_artifact(&mut self, type_id: TypeId) -> requests::PostArtifactRequest {
         requests::PostArtifactRequest::new(self, type_id)
     }
 
@@ -151,7 +151,7 @@ impl MetadataStore {
     async fn get_type_properties(
         &mut self,
         type_kind: TypeKind,
-        type_id: Id,
+        type_id: TypeId,
     ) -> Result<Option<BTreeMap<String, PropertyType>>, GetError> {
         Ok(self
             .get_types(
@@ -172,7 +172,7 @@ impl MetadataStore {
             .bind(item_id.get())
             .fetch_optional(&mut self.connection)
             .await?
-            .map(Id::new)
+            .map(TypeId::new)
             .ok_or_else(|| PutError::NotFound {
                 type_kind: T::TYPE_KIND,
                 item_id,
@@ -290,10 +290,7 @@ impl MetadataStore {
         Ok(items.into_iter().map(|(_, v)| v).collect())
     }
 
-    pub fn post_execution(
-        &mut self,
-        type_id: Id, // TODO: name(?)
-    ) -> requests::PostExecutionRequest {
+    pub fn post_execution(&mut self, type_id: TypeId) -> requests::PostExecutionRequest {
         requests::PostExecutionRequest::new(self, type_id)
     }
 
@@ -307,7 +304,7 @@ impl MetadataStore {
 
     pub fn post_context(
         &mut self,
-        type_id: Id, // TODO: type_name(?) or enum Type{Id(), Name()}
+        type_id: TypeId,
         context_name: &str,
     ) -> requests::PostContextRequest {
         requests::PostContextRequest::new(self, type_id, context_name)
@@ -546,7 +543,7 @@ impl MetadataStore {
         type_kind: TypeKind,
         type_name: &str,
         mut options: PutTypeOptions,
-    ) -> Result<Id, PutError> {
+    ) -> Result<TypeId, PutError> {
         let mut connection = self.connection.begin().await?;
         let ty = sqlx::query_as::<_, query::Type>(self.query.get_type_by_name())
             .bind(type_kind as i32)
@@ -604,7 +601,7 @@ impl MetadataStore {
         }
         connection.commit().await?;
 
-        Ok(Id::new(ty.id))
+        Ok(TypeId::new(ty.id))
     }
 
     pub(crate) async fn get_types<F, T>(
@@ -614,7 +611,7 @@ impl MetadataStore {
         options: GetTypesOptions,
     ) -> Result<Vec<T>, GetError>
     where
-        F: Fn(Id, String, BTreeMap<String, PropertyType>) -> T,
+        F: Fn(TypeId, String, BTreeMap<String, PropertyType>) -> T,
     {
         let sql = self.query.get_types(&options);
         let mut query = sqlx::query_as::<_, query::Type>(&sql).bind(type_kind as i32);
@@ -642,7 +639,7 @@ impl MetadataStore {
 
         Ok(types
             .into_iter()
-            .map(|(id, (name, properties))| f(Id::new(id), name, properties))
+            .map(|(id, (name, properties))| f(TypeId::new(id), name, properties))
             .collect())
     }
 }
