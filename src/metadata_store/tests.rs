@@ -671,14 +671,16 @@ async fn put_attribution_works() -> anyhow::Result<()> {
     let _c0 = store.post_context(t1, "foo").execute().await?;
     let c1 = store.post_context(t1, "bar").execute().await?;
 
-    store.put_attribution(c1, a0).execute().await?;
-    let contexts = store.get_contexts().artifact(a0).execute().await?;
-    assert_eq!(contexts.len(), 1);
-    assert_eq!(contexts[0].id, c1);
+    for _ in 0..2 {
+        store.put_attribution(c1, a0).execute().await?; // The duplicate PUTs are ignored.
+        let contexts = store.get_contexts().artifact(a0).execute().await?;
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].id, c1);
 
-    let artifacts = store.get_artifacts().context(c1).execute().await?;
-    assert_eq!(artifacts.len(), 1);
-    assert_eq!(artifacts[0].id, a0);
+        let artifacts = store.get_artifacts().context(c1).execute().await?;
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].id, a0);
+    }
 
     Ok(())
 }
@@ -698,14 +700,16 @@ async fn put_association_works() -> anyhow::Result<()> {
     let _c0 = store.post_context(t1, "foo").execute().await?;
     let c1 = store.post_context(t1, "bar").execute().await?;
 
-    store.put_association(c1, e0).execute().await?;
-    let contexts = store.get_contexts().execution(e0).execute().await?;
-    assert_eq!(contexts.len(), 1);
-    assert_eq!(contexts[0].id, c1);
+    for _ in 0..2 {
+        store.put_association(c1, e0).execute().await?; // The duplicate PUTs are ignored.
+        let contexts = store.get_contexts().execution(e0).execute().await?;
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].id, c1);
 
-    let executions = store.get_executions().context(c1).execute().await?;
-    assert_eq!(executions.len(), 1);
-    assert_eq!(executions[0].id, e0);
+        let executions = store.get_executions().context(c1).execute().await?;
+        assert_eq!(executions.len(), 1);
+        assert_eq!(executions[0].id, e0);
+    }
 
     Ok(())
 }

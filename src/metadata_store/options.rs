@@ -4,7 +4,6 @@ use crate::metadata::{
 };
 use crate::query::QueryValue;
 use std::collections::BTreeSet;
-use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Debug, Default, Clone)]
 pub struct GetTypesOptions {
@@ -145,7 +144,6 @@ pub struct ContextOptions {
 pub struct PutEventOptions {
     pub(crate) event_type: EventType,
     pub(crate) path: Vec<EventStep>,
-    pub(crate) create_time_since_epoch: Duration,
 }
 
 impl Default for PutEventOptions {
@@ -153,7 +151,6 @@ impl Default for PutEventOptions {
         Self {
             event_type: EventType::Unknown,
             path: Vec::new(),
-            create_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
         }
     }
 }

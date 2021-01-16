@@ -10,7 +10,7 @@ use futures::TryStreamExt as _;
 use sqlx::FromRow as _;
 use sqlx::{AnyConnection, Connection as _, Row as _};
 use std::collections::BTreeMap;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 pub mod options;
 #[cfg(test)]
@@ -65,7 +65,7 @@ impl MetadataStore {
         requests::GetContextTypesRequest::new(self)
     }
 
-    pub(crate) async fn post_item<T>(
+    pub(crate) async fn execute_post_item<T>(
         &mut self,
         type_id: TypeId,
         generator: T,
@@ -156,7 +156,7 @@ impl MetadataStore {
         type_id: TypeId,
     ) -> Result<Option<PropertyTypes>, GetError> {
         Ok(self
-            .get_types(
+            .execute_get_types(
                 type_kind,
                 |_, _, properties| properties,
                 GetTypesOptions::by_id(type_id),
@@ -166,7 +166,11 @@ impl MetadataStore {
             .nth(0))
     }
 
-    pub(crate) async fn put_item<T>(&mut self, item_id: Id, generator: T) -> Result<(), PutError>
+    pub(crate) async fn execute_put_item<T>(
+        &mut self,
+        item_id: Id,
+        generator: T,
+    ) -> Result<(), PutError>
     where
         T: query::PutItemQueryGenerator,
     {
@@ -247,7 +251,10 @@ impl MetadataStore {
         requests::PutArtifactRequest::new(self, artifact_id)
     }
 
-    pub(crate) async fn get_items<T>(&mut self, generator: T) -> Result<Vec<T::Item>, GetError>
+    pub(crate) async fn execute_get_items<T>(
+        &mut self,
+        generator: T,
+    ) -> Result<Vec<T::Item>, GetError>
     where
         T: GetItemsQueryGenerator,
     {
@@ -312,7 +319,7 @@ impl MetadataStore {
         requests::GetContextsRequest::new(self)
     }
 
-    pub(crate) async fn put_relation(
+    pub(crate) async fn execute_put_relation(
         &mut self,
         context_id: ContextId,
         item_id: Id,
@@ -340,11 +347,10 @@ impl MetadataStore {
             return Err(PutError::NotFound { item_id });
         }
 
-        // TODO: check AlreadyExists (error or ignore)
         sqlx::query(if is_attribution {
-            self.query.insert_attribution()
+            self.query.insert_or_ignore_attribution()
         } else {
-            self.query.insert_association()
+            self.query.insert_or_ignore_association()
         })
         .bind(context_id.get())
         .bind(item_id.get())
@@ -378,7 +384,6 @@ impl MetadataStore {
         requests::PutEventRequest::new(self, execution_id, artifact_id)
     }
 
-    // TODO: rename
     pub(crate) async fn execute_put_event(
         &mut self,
         execution_id: ExecutionId,
@@ -411,7 +416,7 @@ impl MetadataStore {
             .bind(artifact_id.get())
             .bind(execution_id.get())
             .bind(options.event_type as i32)
-            .bind(options.create_time_since_epoch.as_millis() as i64)
+            .bind(UNIX_EPOCH.elapsed().unwrap_or_default().as_millis() as i64)
             .execute(&mut connection)
             .await?;
         let event_id: i32 = sqlx::query_scalar(self.query.get_last_event_id())
@@ -476,9 +481,19 @@ impl MetadataStore {
         while let Some(row) = rows.try_next().await? {
             let event = events.get_mut(&row.event_id).expect("bug");
             event.path.push(if row.is_index_step {
-                EventStep::Index(row.step_index.expect("TODO"))
+                let v = row.step_index.ok_or_else(|| {
+                    sqlx::Error::Decode(
+                        anyhow::anyhow!("EventPath.step_index must have a value").into(),
+                    )
+                })?;
+                EventStep::Index(v)
             } else {
-                EventStep::Key(row.step_key.expect("TODO"))
+                let v = row.step_key.ok_or_else(|| {
+                    sqlx::Error::Decode(
+                        anyhow::anyhow!("EventPath.step_key must have a value").into(),
+                    )
+                })?;
+                EventStep::Key(v)
             });
         }
 
@@ -528,7 +543,7 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub(crate) async fn put_type(
+    pub(crate) async fn execute_put_type(
         &mut self,
         type_kind: TypeKind,
         type_name: &str,
@@ -594,7 +609,7 @@ impl MetadataStore {
         Ok(TypeId::new(ty.id))
     }
 
-    pub(crate) async fn get_types<F, T>(
+    pub(crate) async fn execute_get_types<F, T>(
         &mut self,
         type_kind: TypeKind,
         f: F,

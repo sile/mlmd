@@ -32,14 +32,14 @@ impl Query {
         }
     }
 
-    pub fn insert_attribution(&self) -> &'static str {
+    pub fn insert_or_ignore_attribution(&self) -> &'static str {
         match self {
             Self::Sqlite(x) => x.insert_attribution(),
             Self::Mysql(x) => x.insert_attribution(),
         }
     }
 
-    pub fn insert_association(&self) -> &'static str {
+    pub fn insert_or_ignore_association(&self) -> &'static str {
         match self {
             Self::Sqlite(x) => x.insert_association(),
             Self::Mysql(x) => x.insert_association(),
