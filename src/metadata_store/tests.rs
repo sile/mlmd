@@ -188,12 +188,13 @@ async fn post_artifact_works() -> anyhow::Result<()> {
         .post_artifact(type_id)
         .uri(expected.uri.as_ref().unwrap())
         .properties(expected.properties.clone())
-        .create_time_since_epoch(expected.create_time_since_epoch)
-        .last_update_time_since_epoch(expected.last_update_time_since_epoch)
         .execute()
         .await?;
     let artifacts = store.get_artifacts().execute().await?;
     assert_eq!(artifacts.len(), 2);
+
+    expected.create_time_since_epoch = artifacts[1].create_time_since_epoch;
+    expected.last_update_time_since_epoch = artifacts[1].last_update_time_since_epoch;
     assert_eq!(artifacts[1], expected);
 
     // Name confilict.

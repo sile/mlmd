@@ -28,31 +28,6 @@ pub struct PutTypeOptions {
     pub properties: BTreeMap<String, PropertyType>,
 }
 
-#[derive(Debug, Clone)]
-pub struct PostArtifactOptions {
-    pub(crate) name: Option<String>,
-    pub(crate) uri: Option<String>,
-    pub(crate) properties: BTreeMap<String, PropertyValue>,
-    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
-    pub(crate) state: ArtifactState,
-    pub(crate) create_time_since_epoch: Duration,
-    pub(crate) last_update_time_since_epoch: Duration,
-}
-
-impl Default for PostArtifactOptions {
-    fn default() -> Self {
-        Self {
-            name: None,
-            uri: None,
-            properties: BTreeMap::new(),
-            custom_properties: BTreeMap::new(),
-            state: ArtifactState::Unknown,
-            create_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
-            last_update_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct ArtifactOptions {
     pub(crate) name: Option<String>,
@@ -120,29 +95,6 @@ impl GetExecutionsOptions {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct PostExecutionOptions {
-    pub(crate) name: Option<String>,
-    pub(crate) properties: BTreeMap<String, PropertyValue>,
-    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
-    pub(crate) last_known_state: ExecutionState,
-    pub(crate) create_time_since_epoch: Duration,
-    pub(crate) last_update_time_since_epoch: Duration,
-}
-
-impl Default for PostExecutionOptions {
-    fn default() -> Self {
-        Self {
-            name: None,
-            properties: BTreeMap::new(),
-            custom_properties: BTreeMap::new(),
-            last_known_state: ExecutionState::Unknown,
-            create_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
-            last_update_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct ExecutionOptions {
     pub(crate) name: Option<String>,
@@ -187,25 +139,6 @@ pub struct ContextOptions {
     pub(crate) name: Option<String>,
     pub(crate) properties: BTreeMap<String, PropertyValue>,
     pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PostContextOptions {
-    pub(crate) properties: BTreeMap<String, PropertyValue>,
-    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
-    pub(crate) create_time_since_epoch: Duration,
-    pub(crate) last_update_time_since_epoch: Duration,
-}
-
-impl Default for PostContextOptions {
-    fn default() -> Self {
-        Self {
-            properties: BTreeMap::new(),
-            custom_properties: BTreeMap::new(),
-            create_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
-            last_update_time_since_epoch: UNIX_EPOCH.elapsed().unwrap_or_default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

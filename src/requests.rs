@@ -431,7 +431,7 @@ impl<'a> GetContextsRequest<'a> {
 pub struct PostArtifactRequest<'a> {
     store: &'a mut MetadataStore,
     type_id: TypeId,
-    options: options::PostArtifactOptions,
+    options: options::ArtifactOptions,
 }
 
 impl<'a> PostArtifactRequest<'a> {
@@ -482,17 +482,7 @@ impl<'a> PostArtifactRequest<'a> {
     }
 
     pub fn state(mut self, state: ArtifactState) -> Self {
-        self.options.state = state;
-        self
-    }
-
-    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
-        self.options.create_time_since_epoch = time;
-        self
-    }
-
-    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
-        self.options.last_update_time_since_epoch = time;
+        self.options.state = Some(state);
         self
     }
 
@@ -513,7 +503,7 @@ impl<'a> PostArtifactRequest<'a> {
 pub struct PostExecutionRequest<'a> {
     store: &'a mut MetadataStore,
     type_id: TypeId,
-    options: options::PostExecutionOptions,
+    options: options::ExecutionOptions,
 }
 
 impl<'a> PostExecutionRequest<'a> {
@@ -559,17 +549,7 @@ impl<'a> PostExecutionRequest<'a> {
     }
 
     pub fn last_known_state(mut self, state: ExecutionState) -> Self {
-        self.options.last_known_state = state;
-        self
-    }
-
-    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
-        self.options.create_time_since_epoch = time;
-        self
-    }
-
-    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
-        self.options.last_update_time_since_epoch = time;
+        self.options.last_known_state = Some(state);
         self
     }
 
@@ -591,7 +571,7 @@ pub struct PostContextRequest<'a> {
     store: &'a mut MetadataStore,
     type_id: TypeId,
     name: String,
-    options: options::PostContextOptions,
+    options: options::ContextOptions,
 }
 
 impl<'a> PostContextRequest<'a> {
@@ -629,17 +609,6 @@ impl<'a> PostContextRequest<'a> {
         self.options
             .custom_properties
             .insert(key.to_owned(), value.into());
-        self
-    }
-
-    // TODO: delete?
-    pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
-        self.options.create_time_since_epoch = time;
-        self
-    }
-
-    pub fn last_update_time_since_epoch(mut self, time: Duration) -> Self {
-        self.options.last_update_time_since_epoch = time;
         self
     }
 

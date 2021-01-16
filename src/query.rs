@@ -1,8 +1,10 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, EventStep, Id, PropertyValue, TypeId, TypeKind};
+use crate::metadata::{
+    self, ArtifactState, EventStep, ExecutionState, Id, PropertyValue, TypeId, TypeKind,
+};
 use crate::metadata_store::options::{
-    self, GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
-    GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
+    self, ArtifactOptions, ExecutionOptions, GetArtifactsOptions, GetContextsOptions,
+    GetEventsOptions, GetExecutionsOptions, GetTypesOptions,
 };
 use sqlx::database::HasArguments;
 use std::collections::BTreeMap;
@@ -111,7 +113,7 @@ impl Query {
         }
     }
 
-    pub fn insert_artifact(&self, options: &PostArtifactOptions) -> String {
+    pub fn insert_artifact(&self, options: &ArtifactOptions) -> String {
         // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
         // we can use a static INSERT statement without regarding `options`.
         let mut fields =
@@ -254,7 +256,7 @@ impl Query {
         )
     }
 
-    pub fn insert_execution(&self, options: &PostExecutionOptions) -> String {
+    pub fn insert_execution(&self, options: &ExecutionOptions) -> String {
         // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
         // we can use a static INSERT statement without regarding `options`.
         let mut fields =
@@ -1137,7 +1139,7 @@ pub trait PostItemQueryGenerator {
 pub struct PostArtifactQueryGenerator {
     pub query: Query,
     pub type_id: TypeId,
-    pub options: options::PostArtifactOptions,
+    pub options: options::ArtifactOptions,
 }
 
 impl PostItemQueryGenerator for PostArtifactQueryGenerator {
@@ -1165,12 +1167,15 @@ impl PostItemQueryGenerator for PostArtifactQueryGenerator {
     }
 
     fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
+        let current_millis = current_millis();
+        let state = self.options.state.unwrap_or(ArtifactState::Unknown);
+
         let sql = self.query.insert_artifact(&self.options);
         let mut values = vec![
             QueryValue::Int(self.type_id.get()),
-            QueryValue::Int(self.options.state as i32),
-            QueryValue::I64(self.options.create_time_since_epoch.as_millis() as i64),
-            QueryValue::I64(self.options.last_update_time_since_epoch.as_millis() as i64),
+            QueryValue::Int(state as i32),
+            QueryValue::I64(current_millis),
+            QueryValue::I64(current_millis),
         ];
         if let Some(v) = &self.options.name {
             values.push(QueryValue::Str(v));
@@ -1194,7 +1199,7 @@ impl PostItemQueryGenerator for PostArtifactQueryGenerator {
 pub struct PostExecutionQueryGenerator {
     pub query: Query,
     pub type_id: TypeId,
-    pub options: options::PostExecutionOptions,
+    pub options: options::ExecutionOptions,
 }
 
 impl PostItemQueryGenerator for PostExecutionQueryGenerator {
@@ -1222,12 +1227,18 @@ impl PostItemQueryGenerator for PostExecutionQueryGenerator {
     }
 
     fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
+        let current_millis = current_millis();
+        let state = self
+            .options
+            .last_known_state
+            .unwrap_or(ExecutionState::Unknown);
+
         let sql = self.query.insert_execution(&self.options);
         let mut values = vec![
             QueryValue::Int(self.type_id.get()),
-            QueryValue::Int(self.options.last_known_state as i32),
-            QueryValue::I64(self.options.create_time_since_epoch.as_millis() as i64),
-            QueryValue::I64(self.options.last_update_time_since_epoch.as_millis() as i64),
+            QueryValue::Int(state as i32),
+            QueryValue::I64(current_millis),
+            QueryValue::I64(current_millis),
         ];
         if let Some(v) = &self.options.name {
             values.push(QueryValue::Str(v));
@@ -1249,7 +1260,7 @@ pub struct PostContextQueryGenerator {
     pub query: Query,
     pub type_id: TypeId,
     pub name: String,
-    pub options: options::PostContextOptions,
+    pub options: options::ContextOptions,
 }
 
 impl PostItemQueryGenerator for PostContextQueryGenerator {
@@ -1276,11 +1287,13 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
     }
 
     fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
+        let current_millis = current_millis();
+
         let sql = self.query.insert_context();
         let values = vec![
             QueryValue::Int(self.type_id.get()),
-            QueryValue::I64(self.options.create_time_since_epoch.as_millis() as i64),
-            QueryValue::I64(self.options.last_update_time_since_epoch.as_millis() as i64),
+            QueryValue::I64(current_millis),
+            QueryValue::I64(current_millis),
             QueryValue::Str(&self.name),
         ];
         (sql.to_owned(), values)
