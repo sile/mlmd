@@ -71,11 +71,11 @@ impl<'a> GetArtifactTypesRequest<'a> {
     }
 
     pub fn id(mut self, type_id: TypeId) -> Self {
-        self.options.ids.push(type_id);
+        self.options.ids.insert(type_id);
         self
     }
 
-    pub fn ids(mut self, type_ids: &[TypeId]) -> Self {
+    pub fn ids(mut self, type_ids: impl Iterator<Item = TypeId>) -> Self {
         self.options.ids.extend(type_ids);
         self
     }
@@ -158,11 +158,11 @@ impl<'a> GetExecutionTypesRequest<'a> {
     }
 
     pub fn id(mut self, type_id: TypeId) -> Self {
-        self.options.ids.push(type_id);
+        self.options.ids.insert(type_id);
         self
     }
 
-    pub fn ids(mut self, type_ids: &[TypeId]) -> Self {
+    pub fn ids(mut self, type_ids: impl Iterator<Item = TypeId>) -> Self {
         self.options.ids.extend(type_ids);
         self
     }
@@ -245,11 +245,11 @@ impl<'a> GetContextTypesRequest<'a> {
     }
 
     pub fn id(mut self, type_id: TypeId) -> Self {
-        self.options.ids.push(type_id);
+        self.options.ids.insert(type_id);
         self
     }
 
-    pub fn ids(mut self, type_ids: &[TypeId]) -> Self {
+    pub fn ids(mut self, type_ids: impl Iterator<Item = TypeId>) -> Self {
         self.options.ids.extend(type_ids);
         self
     }
@@ -295,11 +295,11 @@ impl<'a> GetArtifactsRequest<'a> {
     }
 
     pub fn id(mut self, artifact_id: ArtifactId) -> Self {
-        self.options.artifact_ids.push(artifact_id);
+        self.options.artifact_ids.insert(artifact_id);
         self
     }
 
-    pub fn ids(mut self, artifact_ids: &[ArtifactId]) -> Self {
+    pub fn ids(mut self, artifact_ids: impl Iterator<Item = ArtifactId>) -> Self {
         self.options.artifact_ids.extend(artifact_ids);
         self
     }
@@ -349,11 +349,11 @@ impl<'a> GetExecutionsRequest<'a> {
     }
 
     pub fn id(mut self, execution_id: ExecutionId) -> Self {
-        self.options.execution_ids.push(execution_id);
+        self.options.execution_ids.insert(execution_id);
         self
     }
 
-    pub fn ids(mut self, execution_ids: &[ExecutionId]) -> Self {
+    pub fn ids(mut self, execution_ids: impl Iterator<Item = ExecutionId>) -> Self {
         self.options.execution_ids.extend(execution_ids);
         self
     }
@@ -398,11 +398,11 @@ impl<'a> GetContextsRequest<'a> {
     }
 
     pub fn id(mut self, context_id: ContextId) -> Self {
-        self.options.context_ids.push(context_id);
+        self.options.context_ids.insert(context_id);
         self
     }
 
-    pub fn ids(mut self, context_ids: &[ContextId]) -> Self {
+    pub fn ids(mut self, context_ids: impl Iterator<Item = ContextId>) -> Self {
         self.options.context_ids.extend(context_ids);
         self
     }
@@ -932,21 +932,21 @@ impl<'a> GetEventsRequest<'a> {
     }
 
     pub fn execution(mut self, id: ExecutionId) -> Self {
-        self.options.execution_ids.push(id);
+        self.options.execution_ids.insert(id);
         self
     }
 
-    pub fn executions(mut self, ids: &[ExecutionId]) -> Self {
+    pub fn executions(mut self, ids: impl Iterator<Item = ExecutionId>) -> Self {
         self.options.execution_ids.extend(ids);
         self
     }
 
     pub fn artifact(mut self, id: ArtifactId) -> Self {
-        self.options.artifact_ids.push(id);
+        self.options.artifact_ids.insert(id);
         self
     }
 
-    pub fn artifacts(mut self, ids: &[ArtifactId]) -> Self {
+    pub fn artifacts(mut self, ids: impl Iterator<Item = ArtifactId>) -> Self {
         self.options.artifact_ids.extend(ids);
         self
     }

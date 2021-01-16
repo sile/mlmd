@@ -3,19 +3,20 @@ use crate::metadata::{
     PropertyTypes, PropertyValues, TypeId,
 };
 use crate::query::QueryValue;
+use std::collections::BTreeSet;
 use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Debug, Default, Clone)]
 pub struct GetTypesOptions {
     pub name: Option<String>,
-    pub ids: Vec<TypeId>,
+    pub ids: BTreeSet<TypeId>,
 }
 
 impl GetTypesOptions {
     pub fn by_id(id: TypeId) -> Self {
         Self {
             name: None,
-            ids: vec![id],
+            ids: vec![id].into_iter().collect(),
         }
     }
 }
@@ -40,7 +41,7 @@ pub struct ArtifactOptions {
 pub struct GetArtifactsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) artifact_name: Option<String>,
-    pub(crate) artifact_ids: Vec<ArtifactId>,
+    pub(crate) artifact_ids: BTreeSet<ArtifactId>,
     pub(crate) uri: Option<String>,
     pub(crate) context_id: Option<ContextId>,
 }
@@ -71,7 +72,7 @@ impl GetArtifactsOptions {
 pub struct GetExecutionsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) execution_name: Option<String>,
-    pub(crate) execution_ids: Vec<ExecutionId>,
+    pub(crate) execution_ids: BTreeSet<ExecutionId>,
     pub(crate) context_id: Option<ContextId>,
 }
 
@@ -106,7 +107,7 @@ pub struct ExecutionOptions {
 pub struct GetContextsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) context_name: Option<String>,
-    pub(crate) context_ids: Vec<ContextId>,
+    pub(crate) context_ids: BTreeSet<ContextId>,
     pub(crate) artifact_id: Option<ArtifactId>,
     pub(crate) execution_id: Option<ExecutionId>,
 }
@@ -159,6 +160,6 @@ impl Default for PutEventOptions {
 
 #[derive(Debug, Default, Clone)]
 pub struct GetEventsOptions {
-    pub(crate) artifact_ids: Vec<ArtifactId>,
-    pub(crate) execution_ids: Vec<ExecutionId>,
+    pub(crate) artifact_ids: BTreeSet<ArtifactId>,
+    pub(crate) execution_ids: BTreeSet<ExecutionId>,
 }

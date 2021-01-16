@@ -138,7 +138,7 @@ async fn get_artifacts_works() -> anyhow::Result<()> {
     let unregistered_id = ArtifactId::new(100);
     let artifacts = store
         .get_artifacts()
-        .ids(&[ArtifactId::new(2), unregistered_id])
+        .ids([ArtifactId::new(2), unregistered_id].iter().copied())
         .execute()
         .await?;
     assert_eq!(artifacts[0].id.get(), 2);
@@ -267,7 +267,7 @@ async fn get_executions_works() -> anyhow::Result<()> {
     let unregistered_id = ExecutionId::new(100);
     let executions = store
         .get_executions()
-        .ids(&[ExecutionId::new(1), unregistered_id])
+        .ids([ExecutionId::new(1), unregistered_id].iter().copied())
         .execute()
         .await?;
     assert_eq!(executions, vec![execution0()]);
@@ -477,7 +477,7 @@ async fn get_contexts_works() -> anyhow::Result<()> {
     let unregistered_id = ContextId::new(100);
     let contexts = store
         .get_contexts()
-        .ids(&[ContextId::new(1), unregistered_id])
+        .ids([ContextId::new(1), unregistered_id].iter().copied())
         .execute()
         .await?;
     assert_eq!(contexts, vec![context0()]);
