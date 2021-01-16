@@ -1,6 +1,6 @@
 use super::*;
 use crate::metadata::{
-    ArtifactState, ArtifactType, ContextType, ExecutionState, ExecutionType, Value,
+    ArtifactState, ArtifactType, ContextType, ExecutionState, ExecutionType, PropertyValue,
 };
 use tempfile::NamedTempFile;
 
@@ -217,10 +217,10 @@ async fn put_artifact_works() -> anyhow::Result<()> {
     artifact.state = ArtifactState::Live;
     artifact
         .properties
-        .insert("day".to_owned(), Value::Int(234));
+        .insert("day".to_owned(), PropertyValue::Int(234));
     artifact
         .custom_properties
-        .insert("bar".to_string(), Value::Int(10));
+        .insert("bar".to_string(), PropertyValue::Int(10));
     store.put_artifact(&artifact).execute().await?;
 
     assert_eq!(store.get_artifacts().execute().await?.len(), 2);
@@ -275,7 +275,7 @@ async fn put_execution_works() -> anyhow::Result<()> {
     execution.last_known_state = ExecutionState::Running;
     execution
         .custom_properties
-        .insert("bar".to_string(), Value::Int(10));
+        .insert("bar".to_string(), PropertyValue::Int(10));
     store.put_execution(&execution).execute().await?;
 
     assert_eq!(store.get_executions().execute().await?.len(), 1);
@@ -478,7 +478,7 @@ async fn put_context_works() -> anyhow::Result<()> {
     context.name = "foo".to_string();
     context
         .custom_properties
-        .insert("bar".to_string(), Value::Int(10));
+        .insert("bar".to_string(), PropertyValue::Int(10));
     store.put_context(&context).execute().await?;
 
     assert_eq!(store.get_contexts().execute().await?.len(), 1);
@@ -767,8 +767,11 @@ fn artifact0() -> Artifact {
         name: None,
         uri: Some("path/to/data".to_owned()),
         properties: vec![
-            ("day".to_owned(), Value::Int(1)),
-            ("split".to_owned(), Value::String("train".to_owned())),
+            ("day".to_owned(), PropertyValue::Int(1)),
+            (
+                "split".to_owned(),
+                PropertyValue::String("train".to_owned()),
+            ),
         ]
         .into_iter()
         .collect(),
@@ -786,8 +789,11 @@ fn artifact1() -> Artifact {
         name: None,
         uri: Some("path/to/model/file".to_owned()),
         properties: vec![
-            ("name".to_owned(), Value::String("MNIST-v1".to_owned())),
-            ("version".to_owned(), Value::Int(1)),
+            (
+                "name".to_owned(),
+                PropertyValue::String("MNIST-v1".to_owned()),
+            ),
+            ("version".to_owned(), PropertyValue::Int(1)),
         ]
         .into_iter()
         .collect(),
@@ -818,7 +824,7 @@ fn context0() -> Context {
         name: "exp.27823".to_owned(),
         properties: vec![(
             "note".to_owned(),
-            Value::String("My first experiment.".to_owned()),
+            PropertyValue::String("My first experiment.".to_owned()),
         )]
         .into_iter()
         .collect(),

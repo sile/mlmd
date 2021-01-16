@@ -1,5 +1,5 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, Artifact, Context, EventStep, Execution, Id, Value};
+use crate::metadata::{self, Artifact, Context, EventStep, Execution, Id, PropertyValue};
 use crate::metadata_store::options::{
     self, GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
     GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
@@ -144,7 +144,7 @@ impl Query {
         format!("UPDATE Artifact SET {} WHERE id=?", fields)
     }
 
-    pub fn upsert_artifact_property(&self, value: &Value) -> String {
+    pub fn upsert_artifact_property(&self, value: &PropertyValue) -> String {
         match self {
             Self::Sqlite(x) => x.upsert_artifact_property(value),
             Self::Mysql(x) => x.upsert_artifact_property(value),
@@ -297,7 +297,7 @@ impl Query {
         format!("UPDATE Execution SET {} WHERE id=?", fields)
     }
 
-    pub fn upsert_execution_property(&self, value: &Value) -> String {
+    pub fn upsert_execution_property(&self, value: &PropertyValue) -> String {
         match self {
             Self::Sqlite(x) => x.upsert_execution_property(value),
             Self::Mysql(x) => x.upsert_execution_property(value),
@@ -394,7 +394,7 @@ impl Query {
         )
     }
 
-    pub fn upsert_context_property(&self, value: &Value) -> String {
+    pub fn upsert_context_property(&self, value: &PropertyValue) -> String {
         match self {
             Self::Sqlite(x) => x.upsert_context_property(value),
             Self::Mysql(x) => x.upsert_context_property(value),
@@ -676,7 +676,7 @@ impl SqliteQuery {
         "INSERT OR IGNORE INTO Association (context_id, execution_id) VALUES (?, ?)"
     }
 
-    fn upsert_artifact_property(&self, value: &Value) -> String {
+    fn upsert_artifact_property(&self, value: &PropertyValue) -> String {
         format!(
             concat!(
                 "INSERT INTO ArtifactProperty ",
@@ -691,7 +691,7 @@ impl SqliteQuery {
         )
     }
 
-    fn upsert_execution_property(&self, value: &Value) -> String {
+    fn upsert_execution_property(&self, value: &PropertyValue) -> String {
         format!(
             concat!(
                 "INSERT INTO ExecutionProperty ",
@@ -706,7 +706,7 @@ impl SqliteQuery {
         )
     }
 
-    fn upsert_context_property(&self, value: &Value) -> String {
+    fn upsert_context_property(&self, value: &PropertyValue) -> String {
         format!(
             concat!(
                 "INSERT INTO ContextProperty ",
@@ -914,7 +914,7 @@ impl MysqlQuery {
         "INSERT IGNORE INTO Association (context_id, execution_id) VALUES (?, ?)"
     }
 
-    fn upsert_artifact_property(&self, value: &Value) -> String {
+    fn upsert_artifact_property(&self, value: &PropertyValue) -> String {
         format!(
             concat!(
                 "INSERT INTO ArtifactProperty ",
@@ -929,7 +929,7 @@ impl MysqlQuery {
         )
     }
 
-    fn upsert_execution_property(&self, value: &Value) -> String {
+    fn upsert_execution_property(&self, value: &PropertyValue) -> String {
         format!(
             concat!(
                 "INSERT INTO ExecutionProperty ",
@@ -944,7 +944,7 @@ impl MysqlQuery {
         )
     }
 
-    fn upsert_context_property(&self, value: &Value) -> String {
+    fn upsert_context_property(&self, value: &PropertyValue) -> String {
         format!(
             concat!(
                 "INSERT INTO ContextProperty ",
@@ -1046,7 +1046,7 @@ pub struct Property {
 }
 
 impl Property {
-    pub fn into_name_and_vaue(self) -> Result<(String, Value), sqlx::Error> {
+    pub fn into_name_and_vaue(self) -> Result<(String, PropertyValue), sqlx::Error> {
         match self {
             Self {
                 name,
@@ -1054,21 +1054,21 @@ impl Property {
                 double_value: None,
                 string_value: None,
                 ..
-            } => Ok((name, Value::Int(v))),
+            } => Ok((name, PropertyValue::Int(v))),
             Self {
                 name,
                 int_value: None,
                 double_value: Some(v),
                 string_value: None,
                 ..
-            } => Ok((name, Value::Double(v))),
+            } => Ok((name, PropertyValue::Double(v))),
             Self {
                 name,
                 int_value: None,
                 double_value: None,
                 string_value: Some(v),
                 ..
-            } => Ok((name, Value::String(v))),
+            } => Ok((name, PropertyValue::String(v))),
             _ => Err(sqlx::Error::Decode(
                 anyhow::anyhow!("a property must have just one value: {:?}", self).into(),
             )),
@@ -1096,7 +1096,7 @@ pub struct EventPath {
 
 // TODO: move
 pub trait InsertProperty {
-    fn insert_property(&mut self, is_custom: bool, name: String, value: Value);
+    fn insert_property(&mut self, is_custom: bool, name: String, value: PropertyValue);
 }
 
 pub trait GetItemsQueryGenerator {
@@ -1177,12 +1177,12 @@ pub trait PostItemQueryGenerator {
     const TYPE_KIND: TypeKind;
 
     fn item_name(&self) -> Option<&str>;
-    fn item_properties(&self) -> &BTreeMap<String, Value>;
-    fn item_custom_properties(&self) -> &BTreeMap<String, Value>;
+    fn item_properties(&self) -> &BTreeMap<String, PropertyValue>;
+    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue>;
     fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
     fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>);
     fn generate_last_item_id(&self) -> &'static str;
-    fn generate_upsert_item_property(&self, value: &Value) -> String;
+    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String;
 }
 
 #[derive(Debug)]
@@ -1199,11 +1199,11 @@ impl PostItemQueryGenerator for PostArtifactQueryGenerator {
         self.options.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.options.custom_properties
     }
 
@@ -1237,7 +1237,7 @@ impl PostItemQueryGenerator for PostArtifactQueryGenerator {
         self.query.get_last_artifact_id()
     }
 
-    fn generate_upsert_item_property(&self, value: &Value) -> String {
+    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
         self.query.upsert_artifact_property(value)
     }
 }
@@ -1256,11 +1256,11 @@ impl PostItemQueryGenerator for PostExecutionQueryGenerator {
         self.options.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.options.custom_properties
     }
 
@@ -1291,7 +1291,7 @@ impl PostItemQueryGenerator for PostExecutionQueryGenerator {
         self.query.get_last_execution_id()
     }
 
-    fn generate_upsert_item_property(&self, value: &Value) -> String {
+    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
         self.query.upsert_execution_property(value)
     }
 }
@@ -1311,11 +1311,11 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
         Some(self.name.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.options.custom_properties
     }
 
@@ -1342,7 +1342,7 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
         self.query.get_last_context_id()
     }
 
-    fn generate_upsert_item_property(&self, value: &Value) -> String {
+    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
         self.query.upsert_context_property(value)
     }
 }
@@ -1353,12 +1353,12 @@ pub trait PutItemQueryGenerator {
     fn item_id(&self) -> Id;
     fn type_id(&self) -> Id;
     fn item_name(&self) -> Option<&str>;
-    fn item_properties(&self) -> &BTreeMap<String, Value>;
-    fn item_custom_properties(&self) -> &BTreeMap<String, Value>;
+    fn item_properties(&self) -> &BTreeMap<String, PropertyValue>;
+    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue>;
     fn generate_get_type_id_query(&self) -> &'static str;
     fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
     fn generate_update_item_query(&self) -> (String, Vec<QueryValue>);
-    fn generate_upsert_item_property(&self, value: &Value) -> String;
+    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String;
 }
 
 #[derive(Debug)]
@@ -1382,11 +1382,11 @@ impl PutItemQueryGenerator for PutArtifactQueryGenerator {
         self.item.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.item.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.item.custom_properties
     }
 
@@ -1424,7 +1424,7 @@ impl PutItemQueryGenerator for PutArtifactQueryGenerator {
         (sql, values)
     }
 
-    fn generate_upsert_item_property(&self, value: &Value) -> String {
+    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
         self.query.upsert_artifact_property(value)
     }
 }
@@ -1450,11 +1450,11 @@ impl PutItemQueryGenerator for PutExecutionQueryGenerator {
         self.item.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.item.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.item.custom_properties
     }
 
@@ -1489,7 +1489,7 @@ impl PutItemQueryGenerator for PutExecutionQueryGenerator {
         (sql, values)
     }
 
-    fn generate_upsert_item_property(&self, value: &Value) -> String {
+    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
         self.query.upsert_execution_property(value)
     }
 }
@@ -1515,11 +1515,11 @@ impl PutItemQueryGenerator for PutContextQueryGenerator {
         Some(self.item.name.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.item.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, Value> {
+    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
         &self.item.custom_properties
     }
 
@@ -1547,7 +1547,7 @@ impl PutItemQueryGenerator for PutContextQueryGenerator {
         (sql.to_owned(), values)
     }
 
-    fn generate_upsert_item_property(&self, value: &Value) -> String {
+    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
         self.query.upsert_context_property(value)
     }
 }

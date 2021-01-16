@@ -1,5 +1,5 @@
 use crate::metadata::{
-    ArtifactState, EventStep, EventType, ExecutionState, Id, PropertyType, Value,
+    ArtifactState, EventStep, EventType, ExecutionState, Id, PropertyType, PropertyValue,
 };
 use crate::query::QueryValue;
 use std::collections::BTreeMap;
@@ -31,8 +31,8 @@ pub struct PutTypeOptions {
 pub struct PostArtifactOptions {
     pub(crate) name: Option<String>,
     pub(crate) uri: Option<String>,
-    pub(crate) properties: BTreeMap<String, Value>,
-    pub(crate) custom_properties: BTreeMap<String, Value>,
+    pub(crate) properties: BTreeMap<String, PropertyValue>,
+    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
     pub(crate) state: ArtifactState,
     pub(crate) create_time_since_epoch: Duration,
     pub(crate) last_update_time_since_epoch: Duration,
@@ -113,8 +113,8 @@ impl GetExecutionsOptions {
 #[derive(Debug, Clone)]
 pub struct PostExecutionOptions {
     pub(crate) name: Option<String>,
-    pub(crate) properties: BTreeMap<String, Value>,
-    pub(crate) custom_properties: BTreeMap<String, Value>,
+    pub(crate) properties: BTreeMap<String, PropertyValue>,
+    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
     pub(crate) last_known_state: ExecutionState,
     pub(crate) create_time_since_epoch: Duration,
     pub(crate) last_update_time_since_epoch: Duration,
@@ -166,8 +166,8 @@ impl GetContextsOptions {
 
 #[derive(Debug, Clone)]
 pub struct PostContextOptions {
-    pub(crate) properties: BTreeMap<String, Value>,
-    pub(crate) custom_properties: BTreeMap<String, Value>,
+    pub(crate) properties: BTreeMap<String, PropertyValue>,
+    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
     pub(crate) create_time_since_epoch: Duration,
     pub(crate) last_update_time_since_epoch: Duration,
 }

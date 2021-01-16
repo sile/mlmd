@@ -75,15 +75,14 @@ pub struct ContextType {
     pub properties: BTreeMap<String, PropertyType>,
 }
 
-// TODO: PropertyValue
 #[derive(Debug, Clone, PartialEq)]
-pub enum Value {
+pub enum PropertyValue {
     Int(i32),
     Double(f64),
     String(String),
 }
 
-impl Value {
+impl PropertyValue {
     pub fn ty(&self) -> PropertyType {
         match self {
             Self::Int(_) => PropertyType::Int,
@@ -117,25 +116,25 @@ impl Value {
     }
 }
 
-impl From<i32> for Value {
+impl From<i32> for PropertyValue {
     fn from(v: i32) -> Self {
         Self::Int(v)
     }
 }
 
-impl From<f64> for Value {
+impl From<f64> for PropertyValue {
     fn from(v: f64) -> Self {
         Self::Double(v)
     }
 }
 
-impl From<String> for Value {
+impl From<String> for PropertyValue {
     fn from(v: String) -> Self {
         Self::String(v)
     }
 }
 
-impl<'a> From<&'a str> for Value {
+impl<'a> From<&'a str> for PropertyValue {
     fn from(v: &'a str) -> Self {
         Self::String(v.to_owned())
     }
@@ -147,15 +146,15 @@ pub struct Artifact {
     pub type_id: Id,
     pub name: Option<String>,
     pub uri: Option<String>,
-    pub properties: BTreeMap<String, Value>,
-    pub custom_properties: BTreeMap<String, Value>,
+    pub properties: BTreeMap<String, PropertyValue>,
+    pub custom_properties: BTreeMap<String, PropertyValue>,
     pub state: ArtifactState,
     pub create_time_since_epoch: Duration,
     pub last_update_time_since_epoch: Duration,
 }
 
 impl crate::query::InsertProperty for Artifact {
-    fn insert_property(&mut self, is_custom: bool, name: String, value: Value) {
+    fn insert_property(&mut self, is_custom: bool, name: String, value: PropertyValue) {
         if is_custom {
             self.custom_properties.insert(name, value);
         } else {
@@ -214,14 +213,14 @@ pub struct Execution {
     pub type_id: Id,
     pub name: Option<String>,
     pub last_known_state: ExecutionState,
-    pub properties: BTreeMap<String, Value>,
-    pub custom_properties: BTreeMap<String, Value>,
+    pub properties: BTreeMap<String, PropertyValue>,
+    pub custom_properties: BTreeMap<String, PropertyValue>,
     pub create_time_since_epoch: Duration,
     pub last_update_time_since_epoch: Duration,
 }
 
 impl crate::query::InsertProperty for Execution {
-    fn insert_property(&mut self, is_custom: bool, name: String, value: Value) {
+    fn insert_property(&mut self, is_custom: bool, name: String, value: PropertyValue) {
         if is_custom {
             self.custom_properties.insert(name, value);
         } else {
@@ -282,14 +281,14 @@ pub struct Context {
     pub id: Id,
     pub type_id: Id,
     pub name: String,
-    pub properties: BTreeMap<String, Value>,
-    pub custom_properties: BTreeMap<String, Value>,
+    pub properties: BTreeMap<String, PropertyValue>,
+    pub custom_properties: BTreeMap<String, PropertyValue>,
     pub create_time_since_epoch: Duration,
     pub last_update_time_since_epoch: Duration,
 }
 
 impl crate::query::InsertProperty for Context {
-    fn insert_property(&mut self, is_custom: bool, name: String, value: Value) {
+    fn insert_property(&mut self, is_custom: bool, name: String, value: PropertyValue) {
         if is_custom {
             self.custom_properties.insert(name, value);
         } else {

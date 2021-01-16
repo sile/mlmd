@@ -1,7 +1,7 @@
 use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeOptions};
 use crate::errors::{GetError, InitError, PostError, PutError};
 use crate::metadata::{
-    Artifact, Context, Event, EventStep, EventType, Execution, Id, PropertyType, Value,
+    Artifact, Context, Event, EventStep, EventType, Execution, Id, PropertyType, PropertyValue,
 };
 use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query, TypeKind};
 use crate::requests;
@@ -128,9 +128,9 @@ impl MetadataStore {
             let sql = generator.generate_upsert_item_property(value);
             let mut query = sqlx::query(&sql).bind(item_id).bind(name).bind(is_custom);
             query = match value {
-                Value::Int(v) => query.bind(*v).bind(*v),
-                Value::Double(v) => query.bind(*v).bind(*v),
-                Value::String(v) => query.bind(v).bind(v),
+                PropertyValue::Int(v) => query.bind(*v).bind(*v),
+                PropertyValue::Double(v) => query.bind(*v).bind(*v),
+                PropertyValue::String(v) => query.bind(v).bind(v),
             };
             query.execute(&mut connection).await?;
         }
@@ -245,9 +245,9 @@ impl MetadataStore {
                 .bind(name)
                 .bind(is_custom);
             query = match value {
-                Value::Int(v) => query.bind(*v).bind(*v),
-                Value::Double(v) => query.bind(*v).bind(*v),
-                Value::String(v) => query.bind(v).bind(v),
+                PropertyValue::Int(v) => query.bind(*v).bind(*v),
+                PropertyValue::Double(v) => query.bind(*v).bind(*v),
+                PropertyValue::String(v) => query.bind(v).bind(v),
             };
             query.execute(&mut connection).await?;
         }
@@ -365,6 +365,7 @@ impl MetadataStore {
             return Err(PutError::NotFound { type_kind, item_id });
         }
 
+        // TODO: check AlreadyExists (error or ignore)
         sqlx::query(if is_attribution {
             self.query.insert_attribution()
         } else {

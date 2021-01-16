@@ -1,7 +1,7 @@
 use crate::errors;
 use crate::metadata::{
     Artifact, ArtifactState, ArtifactType, Context, ContextType, Event, EventStep, EventType,
-    Execution, ExecutionState, ExecutionType, Id, PropertyType, Value,
+    Execution, ExecutionState, ExecutionType, Id, PropertyType, PropertyValue,
 };
 use crate::metadata_store::{options, MetadataStore};
 use crate::query;
@@ -452,19 +452,19 @@ impl<'a> PostArtifactRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
-        T: Into<Value>,
+        T: Into<PropertyValue>,
     {
         self.options.properties.insert(key.to_owned(), value.into());
         self
@@ -472,7 +472,7 @@ impl<'a> PostArtifactRequest<'a> {
 
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
-        T: Into<Value>,
+        T: Into<PropertyValue>,
     {
         self.options
             .custom_properties
@@ -526,19 +526,19 @@ impl<'a> PostExecutionRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
-        T: Into<Value>,
+        T: Into<PropertyValue>,
     {
         self.options.properties.insert(key.to_owned(), value.into());
         self
@@ -546,7 +546,7 @@ impl<'a> PostExecutionRequest<'a> {
 
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
-        T: Into<Value>,
+        T: Into<PropertyValue>,
     {
         self.options
             .custom_properties
@@ -597,19 +597,19 @@ impl<'a> PostContextRequest<'a> {
         }
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, Value>) -> Self {
+    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
-        T: Into<Value>,
+        T: Into<PropertyValue>,
     {
         self.options.properties.insert(key.to_owned(), value.into());
         self
@@ -617,7 +617,7 @@ impl<'a> PostContextRequest<'a> {
 
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
-        T: Into<Value>,
+        T: Into<PropertyValue>,
     {
         self.options
             .custom_properties
@@ -625,6 +625,7 @@ impl<'a> PostContextRequest<'a> {
         self
     }
 
+    // TODO: delete?
     pub fn create_time_since_epoch(mut self, time: Duration) -> Self {
         self.options.create_time_since_epoch = time;
         self
