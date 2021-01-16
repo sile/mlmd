@@ -6,20 +6,22 @@ use crate::metadata::{
 use tempfile::NamedTempFile;
 
 #[async_std::test]
-async fn initialization_works() {
+async fn initialization_works() -> anyhow::Result<()> {
     // Create a new database.
-    let file = NamedTempFile::new().unwrap();
-    MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+    let file = NamedTempFile::new()?;
+    MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     // Open an existing database.
     let file = existing_db();
-    MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+    MetadataStore::connect(&sqlite_uri(file.path())).await?;
+
+    Ok(())
 }
 
 #[async_std::test]
 async fn put_artifact_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     store
         .put_artifact_type("t0")
@@ -70,7 +72,7 @@ async fn put_artifact_type_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_artifact_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     let t0_id = store
         .put_artifact_type("t0")
@@ -111,7 +113,7 @@ async fn get_artifact_type_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_artifact_types_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
     let types = store.get_artifact_types().execute().await?;
     assert_eq!(types.len(), 2);
     assert_eq!(types[0].name, "DataSet");
@@ -122,7 +124,7 @@ async fn get_artifact_types_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_artifacts_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     // All.
     let artifacts = store.get_artifacts().execute().await?;
@@ -164,7 +166,7 @@ async fn get_artifacts_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn post_artifact_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     assert!(store.get_artifacts().execute().await?.is_empty());
 
@@ -215,7 +217,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn put_artifact_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
     assert_eq!(store.get_artifacts().execute().await?.len(), 2);
 
     let mut artifact = artifact0();
@@ -248,7 +250,7 @@ async fn put_artifact_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_executions_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     // All.
     let executions = store.get_executions().execute().await?;
@@ -284,7 +286,7 @@ async fn get_executions_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn put_execution_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
     assert_eq!(store.get_executions().execute().await?.len(), 1);
 
     let mut execution = execution0();
@@ -313,7 +315,7 @@ async fn put_execution_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn post_execution_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     assert!(store.get_executions().execute().await?.is_empty());
 
@@ -349,7 +351,7 @@ async fn post_execution_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn put_execution_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     store
         .put_execution_type("t0")
@@ -400,7 +402,7 @@ async fn put_execution_type_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_execution_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     let t0_id = store
         .put_execution_type("t0")
@@ -441,7 +443,7 @@ async fn get_execution_type_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_execution_types_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
     let types = store.get_execution_types().execute().await?;
     assert_eq!(types.len(), 1);
     assert_eq!(types[0].name, "Trainer");
@@ -451,7 +453,7 @@ async fn get_execution_types_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_contexts_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     // All.
     let contexts = store.get_contexts().execute().await?;
@@ -502,7 +504,7 @@ async fn get_contexts_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn put_context_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
     assert_eq!(store.get_contexts().execute().await?.len(), 1);
 
     let mut context = context0();
@@ -529,7 +531,7 @@ async fn put_context_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn post_context_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     assert!(store.get_contexts().execute().await?.is_empty());
 
@@ -555,7 +557,7 @@ async fn post_context_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn put_context_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     store
         .put_context_type("t0")
@@ -606,7 +608,7 @@ async fn put_context_type_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_context_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     let t0_id = store
         .put_context_type("t0")
@@ -647,7 +649,7 @@ async fn get_context_type_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_context_types_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
     let types = store.get_context_types().execute().await?;
     assert_eq!(types.len(), 1);
     assert_eq!(types[0].name, "Experiment");
@@ -657,7 +659,9 @@ async fn get_context_types_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn put_attribution_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path()))
+        .await
+        .unwrap();
 
     let t0 = store.put_artifact_type("t0").execute().await?;
     let a0 = store.post_artifact(t0).execute().await?;
@@ -682,7 +686,9 @@ async fn put_attribution_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn put_association_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path()))
+        .await
+        .unwrap();
 
     let t0 = store.put_execution_type("t0").execute().await?;
     let e0 = store.post_execution(t0).execute().await?;
@@ -707,7 +713,9 @@ async fn put_association_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn put_event_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await.unwrap();
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path()))
+        .await
+        .unwrap();
 
     let t0 = store.put_execution_type("t0").execute().await?;
     let e0 = store.post_execution(t0).execute().await?;
@@ -748,7 +756,7 @@ async fn put_event_works() -> anyhow::Result<()> {
 #[async_std::test]
 async fn get_events_works() -> anyhow::Result<()> {
     let file = existing_db();
-    let mut store = MetadataStore::new(&sqlite_uri(file.path())).await?;
+    let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     let events = store.get_events().execute().await?;
     assert_eq!(events, vec![event0(), event1()]);

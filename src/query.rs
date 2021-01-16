@@ -1044,7 +1044,6 @@ pub struct EventPath {
     pub step_key: Option<String>,
 }
 
-// TODO: move
 pub trait InsertProperty {
     fn insert_property(&mut self, is_custom: bool, name: String, value: PropertyValue);
 }

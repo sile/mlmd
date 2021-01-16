@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let opt = Opt::from_args();
-    let mut store = MetadataStore::new(&opt.database_uri).await?;
+    let mut store = MetadataStore::connect(&opt.database_uri).await?;
     println!("Connected");
     println!();
 

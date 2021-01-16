@@ -21,12 +21,11 @@ const SCHEMA_VERSION: i32 = 6;
 #[derive(Debug)]
 pub struct MetadataStore {
     connection: sqlx::AnyConnection,
-    pub(crate) query: Query, // TODO
+    pub(crate) query: Query,
 }
 
 impl MetadataStore {
-    // TODO: connect
-    pub async fn new(database_uri: &str) -> Result<Self, InitError> {
+    pub async fn connect(database_uri: &str) -> Result<Self, InitError> {
         let query = if database_uri.starts_with("sqlite:") {
             Query::sqlite()
         } else if database_uri.starts_with("mysql:") {

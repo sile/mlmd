@@ -131,7 +131,6 @@ pub type PropertyValues = BTreeMap<String, PropertyValue>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropertyType {
-    // TODO: Unknown = 0,
     Int = 1,
     Double = 2,
     String = 3,
@@ -140,7 +139,6 @@ pub enum PropertyType {
 impl PropertyType {
     pub(crate) fn from_i32(value: i32) -> Result<Self, sqlx::Error> {
         match value {
-            // 0 => Ok(Self::Unknown),
             1 => Ok(Self::Int),
             2 => Ok(Self::Double),
             3 => Ok(Self::String),
