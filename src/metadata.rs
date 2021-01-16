@@ -9,6 +9,16 @@ pub enum TypeKind {
     Context = 2,
 }
 
+impl TypeKind {
+    pub(crate) fn item_table_name(&self) -> &'static str {
+        match self {
+            Self::Execution => "Execution",
+            Self::Artifact => "Artifact",
+            Self::Context => "Context",
+        }
+    }
+}
+
 impl std::fmt::Display for TypeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -116,6 +126,14 @@ impl Id {
             Self::Artifact(_) => TypeKind::Artifact,
             Self::Execution(_) => TypeKind::Execution,
             Self::Context(_) => TypeKind::Context,
+        }
+    }
+
+    pub(crate) fn from_kind(id: i32, kind: TypeKind) -> Self {
+        match kind {
+            TypeKind::Artifact => Self::Artifact(ArtifactId::new(id)),
+            TypeKind::Execution => Self::Execution(ExecutionId::new(id)),
+            TypeKind::Context => Self::Context(ContextId::new(id)),
         }
     }
 }

@@ -5,9 +5,11 @@ use crate::metadata::{
 };
 use crate::metadata_store::options::{
     self, ArtifactOptions, ExecutionOptions, GetArtifactsOptions, GetContextsOptions,
-    GetEventsOptions, GetExecutionsOptions, GetTypesOptions,
+    GetEventsOptions, GetExecutionsOptions, GetTypesOptions, ItemOptions,
 };
+use sqlx::any::AnyArguments;
 use sqlx::database::HasArguments;
+use sqlx::Arguments as _;
 use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone)]
@@ -46,10 +48,21 @@ impl Query {
         }
     }
 
+    pub fn get_type_id(&self, item_id: Id) -> (String, AnyArguments) {
+        let sql = format!(
+            "SELECT type_id FROM {} WHERE id = ?",
+            item_id.kind().item_table_name(),
+        );
+        let mut args = sqlx::any::AnyArguments::default();
+        args.add(item_id.get());
+        (sql, args)
+    }
+
     pub fn select_schema_version(&self) -> &'static str {
         "SELECT schema_version FROM MLMDEnv"
     }
 
+    // TODO: or ignore
     pub fn insert_schema_version(&self) -> &'static str {
         "INSERT INTO MLMDEnv VALUES (?)"
     }
@@ -132,10 +145,60 @@ impl Query {
         format!("INSERT INTO Artifact ({}) VALUES ({})", fields, values)
     }
 
-    pub fn upsert_artifact_property(&self, value: &PropertyValue) -> String {
+    pub fn update_item(&self, item_id: Id, options: &ItemOptions) -> (String, AnyArguments) {
+        let mut fields = "last_update_time_since_epoch=?".to_owned();
+        let mut args = AnyArguments::default();
+        args.add(current_millis());
+
+        if let Some(v) = options.name() {
+            fields += ", name=?";
+            args.add(v.to_owned());
+        }
+        for (name, value) in options.extra_fields() {
+            fields += &format!(", {}=?", name);
+            match value {
+                QueryValue::Int(v) => args.add(v),
+                QueryValue::I64(v) => args.add(v),
+                QueryValue::Str(v) => args.add(v.to_owned()),
+            }
+        }
+
+        let sql = format!(
+            "UPDATE {} SET {} WHERE id=?",
+            item_id.kind().item_table_name(),
+            fields
+        );
+        args.add(item_id.get());
+
+        (sql, args)
+    }
+
+    pub fn upsert_item_property(
+        &self,
+        item_id: Id,
+        property_name: &str,
+        value: &PropertyValue,
+        is_custom: bool,
+    ) -> (String, AnyArguments) {
+        let sql = self.upsert_item_property_sql(item_id, value);
+        let mut args = AnyArguments::default();
+        args.add(item_id.get());
+        args.add(property_name.to_owned());
+        args.add(is_custom);
+        for _ in 0..2 {
+            match value.clone() {
+                PropertyValue::Int(v) => args.add(v),
+                PropertyValue::Double(v) => args.add(v),
+                PropertyValue::String(v) => args.add(v),
+            }
+        }
+        (sql, args)
+    }
+
+    fn upsert_item_property_sql(&self, item_id: Id, value: &PropertyValue) -> String {
         match self {
-            Self::Sqlite(x) => x.upsert_artifact_property(value),
-            Self::Mysql(x) => x.upsert_artifact_property(value),
+            Self::Sqlite(x) => x.upsert_item_property_sql(item_id, value),
+            Self::Mysql(x) => x.upsert_item_property_sql(item_id, value),
         }
     }
 
@@ -272,13 +335,6 @@ impl Query {
         format!("INSERT INTO Execution ({}) VALUES ({})", fields, values)
     }
 
-    pub fn upsert_execution_property(&self, value: &PropertyValue) -> String {
-        match self {
-            Self::Sqlite(x) => x.upsert_execution_property(value),
-            Self::Mysql(x) => x.upsert_execution_property(value),
-        }
-    }
-
     pub fn get_last_execution_id(&self) -> &'static str {
         "SELECT id FROM Execution ORDER BY id DESC LIMIT 1"
     }
@@ -361,15 +417,27 @@ impl Query {
         )
     }
 
-    pub fn upsert_context_property(&self, value: &PropertyValue) -> String {
-        match self {
-            Self::Sqlite(x) => x.upsert_context_property(value),
-            Self::Mysql(x) => x.upsert_context_property(value),
-        }
-    }
-
     pub fn get_last_context_id(&self) -> &'static str {
         "SELECT id FROM Context ORDER BY id DESC LIMIT 1"
+    }
+
+    pub fn check_item_name(
+        &self,
+        type_id: TypeId,
+        item_id: Option<Id>,
+        item_name: &str,
+    ) -> (String, AnyArguments) {
+        let mut sql = format!("SELECT count(*) FROM Context WHERE type_id=? AND name=?");
+        let mut args = AnyArguments::default();
+        args.add(type_id.get());
+        args.add(item_name.to_owned());
+
+        if let Some(item_id) = item_id {
+            sql += " AND id != ?";
+            args.add(item_id.get());
+        }
+
+        (sql, args)
     }
 
     pub fn check_context_name(&self, is_post: bool) -> &'static str {
@@ -643,48 +711,20 @@ impl SqliteQuery {
         "INSERT OR IGNORE INTO Association (context_id, execution_id) VALUES (?, ?)"
     }
 
-    fn upsert_artifact_property(&self, value: &PropertyValue) -> String {
+    fn upsert_item_property_sql(&self, item_id: Id, value: &PropertyValue) -> String {
         format!(
             concat!(
-                "INSERT INTO ArtifactProperty ",
-                "(artifact_id, name, is_custom_property, int_value, double_value, string_value) ",
+                "INSERT INTO {3}Property ",
+                "({4}_id, name, is_custom_property, int_value, double_value, string_value) ",
                 "VALUES (?, ?, ?, {0}, {1}, {2}) ",
-                "ON CONFLICT (artifact_id, name, is_custom_property) ",
+                "ON CONFLICT ({4}_id, name, is_custom_property) ",
                 "DO UPDATE SET int_value={0}, double_value={1}, string_value={2}"
             ),
             maybe_null(value.as_int().is_some(), "?"),
             maybe_null(value.as_double().is_some(), "?"),
-            maybe_null(value.as_string().is_some(), "?")
-        )
-    }
-
-    fn upsert_execution_property(&self, value: &PropertyValue) -> String {
-        format!(
-            concat!(
-                "INSERT INTO ExecutionProperty ",
-                "(execution_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
-                "ON CONFLICT (execution_id, name, is_custom_property) ",
-                "DO UPDATE SET int_value={0}, double_value={1}, string_value={2}"
-            ),
-            maybe_null(value.as_int().is_some(), "?"),
-            maybe_null(value.as_double().is_some(), "?"),
-            maybe_null(value.as_string().is_some(), "?")
-        )
-    }
-
-    fn upsert_context_property(&self, value: &PropertyValue) -> String {
-        format!(
-            concat!(
-                "INSERT INTO ContextProperty ",
-                "(context_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
-                "ON CONFLICT (context_id, name, is_custom_property) ",
-                "DO UPDATE SET int_value={0}, double_value={1}, string_value={2}"
-            ),
-            maybe_null(value.as_int().is_some(), "?"),
-            maybe_null(value.as_double().is_some(), "?"),
-            maybe_null(value.as_string().is_some(), "?")
+            maybe_null(value.as_string().is_some(), "?"),
+            item_id.kind().item_table_name(),
+            item_id.kind()
         )
     }
 }
@@ -881,48 +921,20 @@ impl MysqlQuery {
         "INSERT IGNORE INTO Association (context_id, execution_id) VALUES (?, ?)"
     }
 
-    fn upsert_artifact_property(&self, value: &PropertyValue) -> String {
+    fn upsert_item_property_sql(&self, item_id: Id, value: &PropertyValue) -> String {
         format!(
             concat!(
-                "INSERT INTO ArtifactProperty ",
-                "(artifact_id, name, is_custom_property, int_value, double_value, string_value) ",
+                "INSERT INTO {3}Property ",
+                "({4}_id, name, is_custom_property, int_value, double_value, string_value) ",
                 "VALUES (?, ?, ?, {0}, {1}, {2}) ",
                 "ON DUPLICATE KEY ",
                 "UPDATE int_value={0}, double_value={1}, string_value={2}"
             ),
             maybe_null(value.as_int().is_some(), "?"),
             maybe_null(value.as_double().is_some(), "?"),
-            maybe_null(value.as_string().is_some(), "?")
-        )
-    }
-
-    fn upsert_execution_property(&self, value: &PropertyValue) -> String {
-        format!(
-            concat!(
-                "INSERT INTO ExecutionProperty ",
-                "(execution_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
-                "ON DUPLICATE KEY ",
-                "UPDATE int_value={0}, double_value={1}, string_value={2}"
-            ),
-            maybe_null(value.as_int().is_some(), "?"),
-            maybe_null(value.as_double().is_some(), "?"),
-            maybe_null(value.as_string().is_some(), "?")
-        )
-    }
-
-    fn upsert_context_property(&self, value: &PropertyValue) -> String {
-        format!(
-            concat!(
-                "INSERT INTO ContextProperty ",
-                "(context_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
-                "ON DUPLICATE KEY ",
-                "UPDATE int_value={0}, double_value={1}, string_value={2}"
-            ),
-            maybe_null(value.as_int().is_some(), "?"),
-            maybe_null(value.as_double().is_some(), "?"),
-            maybe_null(value.as_string().is_some(), "?")
+            maybe_null(value.as_string().is_some(), "?"),
+            item_id.kind().item_table_name(),
+            item_id.kind()
         )
     }
 }
@@ -1131,7 +1143,6 @@ pub trait PostItemQueryGenerator {
     fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
     fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>);
     fn generate_last_item_id(&self) -> &'static str;
-    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String;
 }
 
 #[derive(Debug)]
@@ -1187,10 +1198,6 @@ impl PostItemQueryGenerator for PostArtifactQueryGenerator {
 
     fn generate_last_item_id(&self) -> &'static str {
         self.query.get_last_artifact_id()
-    }
-
-    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
-        self.query.upsert_artifact_property(value)
     }
 }
 
@@ -1248,10 +1255,6 @@ impl PostItemQueryGenerator for PostExecutionQueryGenerator {
     fn generate_last_item_id(&self) -> &'static str {
         self.query.get_last_execution_id()
     }
-
-    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
-        self.query.upsert_execution_property(value)
-    }
 }
 
 #[derive(Debug)]
@@ -1301,204 +1304,8 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
     fn generate_last_item_id(&self) -> &'static str {
         self.query.get_last_context_id()
     }
-
-    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
-        self.query.upsert_context_property(value)
-    }
-}
-
-pub trait PutItemQueryGenerator {
-    fn item_name(&self) -> Option<&str>;
-    fn item_properties(&self) -> &PropertyValues;
-    fn item_custom_properties(&self) -> &PropertyValues;
-    fn generate_get_type_id_query(&self) -> &'static str;
-    fn generate_check_item_name_query(
-        &self,
-        type_id: TypeId,
-    ) -> Option<(&'static str, Vec<QueryValue>)>;
-    fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>);
-    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String;
-}
-
-#[derive(Debug)]
-pub struct PutArtifactQueryGenerator {
-    pub query: Query,
-    pub options: options::ArtifactOptions,
-}
-
-impl PutItemQueryGenerator for PutArtifactQueryGenerator {
-    fn item_name(&self) -> Option<&str> {
-        self.options.name.as_ref().map(|n| n.as_str())
-    }
-
-    fn item_properties(&self) -> &PropertyValues {
-        &self.options.properties
-    }
-
-    fn item_custom_properties(&self) -> &PropertyValues {
-        &self.options.custom_properties
-    }
-
-    fn generate_check_item_name_query(
-        &self,
-        type_id: TypeId,
-    ) -> Option<(&'static str, Vec<QueryValue>)> {
-        if let Some(name) = &self.options.name {
-            let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];
-            Some((self.query.check_artifact_name(true), values))
-        } else {
-            None
-        }
-    }
-
-    fn generate_get_type_id_query(&self) -> &'static str {
-        // TODO
-        "SELECT type_id FROM Artifact WHERE id = ?"
-    }
-
-    fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>) {
-        let mut fields = "last_update_time_since_epoch=?".to_owned();
-        let mut values = vec![QueryValue::I64(current_millis())];
-
-        if let Some(v) = self.options.state {
-            fields += ", state=?";
-            values.push(QueryValue::Int(v as i32));
-        }
-        if let Some(v) = &self.options.name {
-            fields += ", name=?";
-            values.push(QueryValue::Str(v));
-        }
-        if let Some(v) = &self.options.uri {
-            fields += ", uri=?";
-            values.push(QueryValue::Str(v));
-        }
-
-        let sql = format!("UPDATE Artifact SET {} WHERE id=?", fields);
-        values.push(QueryValue::Int(item_id.get()));
-
-        (sql, values)
-    }
-
-    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
-        self.query.upsert_artifact_property(value)
-    }
 }
 
 fn current_millis() -> i64 {
     UNIX_EPOCH.elapsed().unwrap_or_default().as_millis() as i64
-}
-
-#[derive(Debug)]
-pub struct PutExecutionQueryGenerator {
-    pub query: Query,
-    pub options: options::ExecutionOptions,
-}
-
-impl PutItemQueryGenerator for PutExecutionQueryGenerator {
-    fn item_name(&self) -> Option<&str> {
-        self.options.name.as_ref().map(|n| n.as_str())
-    }
-
-    fn item_properties(&self) -> &PropertyValues {
-        &self.options.properties
-    }
-
-    fn item_custom_properties(&self) -> &PropertyValues {
-        &self.options.custom_properties
-    }
-
-    fn generate_check_item_name_query(
-        &self,
-        type_id: TypeId,
-    ) -> Option<(&'static str, Vec<QueryValue>)> {
-        if let Some(name) = &self.options.name {
-            let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];
-            Some((self.query.check_execution_name(true), values))
-        } else {
-            None
-        }
-    }
-
-    fn generate_get_type_id_query(&self) -> &'static str {
-        // TODO
-        "SELECT type_id FROM Execution WHERE id = ?"
-    }
-
-    fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>) {
-        let mut fields = "last_update_time_since_epoch=?".to_owned();
-        let mut values = vec![QueryValue::I64(current_millis())];
-
-        if let Some(v) = &self.options.name {
-            fields += ", name=?";
-            values.push(QueryValue::Str(v));
-        }
-        if let Some(v) = self.options.last_known_state {
-            fields += ", last_known_state=?";
-            values.push(QueryValue::Int(v as i32));
-        }
-
-        let sql = format!("UPDATE Execution SET {} WHERE id=?", fields);
-        values.push(QueryValue::Int(item_id.get()));
-        (sql, values)
-    }
-
-    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
-        self.query.upsert_execution_property(value)
-    }
-}
-
-#[derive(Debug)]
-pub struct PutContextQueryGenerator {
-    pub query: Query,
-    pub options: options::ContextOptions,
-}
-
-impl PutItemQueryGenerator for PutContextQueryGenerator {
-    fn item_name(&self) -> Option<&str> {
-        self.options.name.as_ref().map(|n| n.as_str())
-    }
-
-    fn item_properties(&self) -> &PropertyValues {
-        &self.options.properties
-    }
-
-    fn item_custom_properties(&self) -> &PropertyValues {
-        &self.options.custom_properties
-    }
-
-    fn generate_check_item_name_query(
-        &self,
-        type_id: TypeId,
-    ) -> Option<(&'static str, Vec<QueryValue>)> {
-        if let Some(name) = &self.options.name {
-            let values = vec![QueryValue::Int(type_id.get()), QueryValue::Str(name)];
-            Some((self.query.check_context_name(true), values))
-        } else {
-            None
-        }
-    }
-
-    fn generate_get_type_id_query(&self) -> &'static str {
-        // TODO
-        "SELECT type_id FROM Context WHERE id = ?"
-    }
-
-    fn generate_update_item_query(&self, item_id: Id) -> (String, Vec<QueryValue>) {
-        let mut fields = "last_update_time_since_epoch=?".to_owned();
-        let mut values = vec![QueryValue::I64(current_millis())];
-
-        if let Some(v) = &self.options.name {
-            fields += ", name=?";
-            values.push(QueryValue::Str(v));
-        }
-
-        let sql = format!("UPDATE Context SET {} WHERE id=?", fields);
-        values.push(QueryValue::Int(item_id.get()));
-
-        (sql.to_owned(), values)
-    }
-
-    fn generate_upsert_item_property(&self, value: &PropertyValue) -> String {
-        self.query.upsert_context_property(value)
-    }
 }

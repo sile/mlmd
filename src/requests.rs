@@ -684,12 +684,11 @@ impl<'a> PutArtifactRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<(), errors::PutError> {
-        let generator = query::PutArtifactQueryGenerator {
-            query: self.store.query.clone(),
-            options: self.options,
-        };
         self.store
-            .execute_put_item(Id::Artifact(self.id), generator)
+            .execute_put_item(
+                Id::Artifact(self.id),
+                options::ItemOptions::Artifact(self.options),
+            )
             .await
     }
 }
@@ -749,12 +748,11 @@ impl<'a> PutExecutionRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<(), errors::PutError> {
-        let generator = query::PutExecutionQueryGenerator {
-            query: self.store.query.clone(),
-            options: self.options,
-        };
         self.store
-            .execute_put_item(Id::Execution(self.id), generator)
+            .execute_put_item(
+                Id::Execution(self.id),
+                options::ItemOptions::Execution(self.options),
+            )
             .await
     }
 }
@@ -809,12 +807,11 @@ impl<'a> PutContextRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<(), errors::PutError> {
-        let generator = query::PutContextQueryGenerator {
-            query: self.store.query.clone(),
-            options: self.options,
-        };
         self.store
-            .execute_put_item(Id::Context(self.id), generator)
+            .execute_put_item(
+                Id::Context(self.id),
+                options::ItemOptions::Context(self.options),
+            )
             .await
     }
 }

@@ -27,6 +27,60 @@ pub struct PutTypeOptions {
     pub properties: PropertyTypes,
 }
 
+#[derive(Debug, Clone)]
+pub enum ItemOptions {
+    Artifact(ArtifactOptions),
+    Execution(ExecutionOptions),
+    Context(ContextOptions),
+}
+
+impl ItemOptions {
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Self::Artifact(x) => x.name.as_ref().map(|n| n.as_str()),
+            Self::Execution(x) => x.name.as_ref().map(|n| n.as_str()),
+            Self::Context(x) => x.name.as_ref().map(|n| n.as_str()),
+        }
+    }
+
+    pub fn properties(&self) -> &PropertyValues {
+        match self {
+            Self::Artifact(x) => &x.properties,
+            Self::Execution(x) => &x.properties,
+            Self::Context(x) => &x.properties,
+        }
+    }
+
+    pub fn custom_properties(&self) -> &PropertyValues {
+        match self {
+            Self::Artifact(x) => &x.custom_properties,
+            Self::Execution(x) => &x.custom_properties,
+            Self::Context(x) => &x.custom_properties,
+        }
+    }
+
+    pub fn extra_fields(&self) -> Vec<(&'static str, QueryValue)> {
+        let mut fields = Vec::new();
+        match self {
+            Self::Artifact(x) => {
+                if let Some(uri) = &x.uri {
+                    fields.push(("uri", QueryValue::Str(uri)));
+                }
+                if let Some(state) = x.state {
+                    fields.push(("state", QueryValue::Int(state as i32)));
+                }
+            }
+            Self::Execution(x) => {
+                if let Some(state) = x.last_known_state {
+                    fields.push(("last_known_state", QueryValue::Int(state as i32)));
+                }
+            }
+            Self::Context(_) => {}
+        }
+        fields
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ArtifactOptions {
     pub(crate) name: Option<String>,

@@ -1,8 +1,10 @@
-use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeOptions};
+use self::options::{
+    GetEventsOptions, GetTypesOptions, ItemOptions, PutEventOptions, PutTypeOptions,
+};
 use crate::errors::{GetError, InitError, PostError, PutError};
 use crate::metadata::{
     ArtifactId, ContextId, Event, EventStep, EventType, ExecutionId, Id, PropertyType,
-    PropertyTypes, PropertyValue, TypeId, TypeKind,
+    PropertyTypes, TypeId, TypeKind,
 };
 use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query};
 use crate::requests;
@@ -37,7 +39,6 @@ impl MetadataStore {
         let connection = AnyConnection::connect(database_uri).await?;
         let mut this = Self { connection, query };
         this.initialize_database().await?;
-        this.check_schema_version().await?;
         Ok(this)
     }
 
@@ -128,14 +129,15 @@ impl MetadataStore {
                     .map(|(k, v)| (k, v, true)),
             );
         for (name, value, is_custom) in properties {
-            let sql = generator.generate_upsert_item_property(value);
-            let mut query = sqlx::query(&sql).bind(item_id).bind(name).bind(is_custom);
-            query = match value {
-                PropertyValue::Int(v) => query.bind(*v).bind(*v),
-                PropertyValue::Double(v) => query.bind(*v).bind(*v),
-                PropertyValue::String(v) => query.bind(v).bind(v),
-            };
-            query.execute(&mut connection).await?;
+            let (sql, args) = self.query.upsert_item_property(
+                Id::from_kind(item_id, T::TYPE_KIND),
+                name,
+                value,
+                is_custom,
+            );
+            sqlx::query_with(&sql, args)
+                .execute(&mut connection)
+                .await?;
         }
 
         connection.commit().await?;
@@ -166,27 +168,23 @@ impl MetadataStore {
             .nth(0))
     }
 
-    pub(crate) async fn execute_put_item<T>(
+    pub(crate) async fn execute_put_item(
         &mut self,
         item_id: Id,
-        generator: T,
-    ) -> Result<(), PutError>
-    where
-        T: query::PutItemQueryGenerator,
-    {
-        let type_kind = item_id.kind();
-        let type_id = sqlx::query_scalar(generator.generate_get_type_id_query())
-            .bind(item_id.get())
+        options: ItemOptions,
+    ) -> Result<(), PutError> {
+        let (sql, args) = self.query.get_type_id(item_id);
+        let type_id = sqlx::query_scalar_with(&sql, args)
             .fetch_optional(&mut self.connection)
             .await?
             .map(TypeId::new)
             .ok_or_else(|| PutError::NotFound { item_id })?;
 
         let property_types = self
-            .get_type_properties(type_kind, type_id)
+            .get_type_properties(item_id.kind(), type_id)
             .await?
             .ok_or_else(|| PutError::TypeNotFound { type_id, item_id })?;
-        for (name, value) in generator.item_properties() {
+        for (name, value) in options.properties() {
             if property_types.get(name).copied() != Some(value.ty()) {
                 return Err(PutError::UndefinedProperty {
                     item_id,
@@ -198,49 +196,43 @@ impl MetadataStore {
 
         let mut connection = self.connection.begin().await?;
 
-        if let Some((sql, values)) = generator.generate_check_item_name_query(type_id) {
-            let count: i32 = values
-                .into_iter()
-                .fold(sqlx::query_scalar(&sql), |q, v| v.bind_scalar(q))
+        if let Some(item_name) = options.name() {
+            let (sql, args) = self
+                .query
+                .check_item_name(type_id, Some(item_id), item_name);
+            let count: i32 = sqlx::query_scalar_with(&sql, args)
                 .fetch_one(&mut connection)
                 .await?;
             if count > 0 {
                 return Err(PutError::NameAlreadyExists {
                     item_id,
-                    item_name: generator.item_name().expect("bug").to_owned(),
+                    item_name: item_name.to_owned(),
                 });
             }
         }
 
-        let (sql, values) = generator.generate_update_item_query(item_id);
-        values
-            .into_iter()
-            .fold(sqlx::query(&sql), |q, v| v.bind(q))
+        let (sql, args) = self.query.update_item(item_id, &options);
+        sqlx::query_with(&sql, args)
             .execute(&mut connection)
             .await?;
 
-        let properties = generator
-            .item_properties()
+        let properties = options
+            .properties()
             .iter()
             .map(|(k, v)| (k, v, false))
             .chain(
-                generator
-                    .item_custom_properties()
+                options
+                    .custom_properties()
                     .iter()
                     .map(|(k, v)| (k, v, true)),
             );
         for (name, value, is_custom) in properties {
-            let sql = generator.generate_upsert_item_property(value);
-            let mut query = sqlx::query(&sql)
-                .bind(item_id.get())
-                .bind(name)
-                .bind(is_custom);
-            query = match value {
-                PropertyValue::Int(v) => query.bind(*v).bind(*v),
-                PropertyValue::Double(v) => query.bind(*v).bind(*v),
-                PropertyValue::String(v) => query.bind(v).bind(v),
-            };
-            query.execute(&mut connection).await?;
+            let (sql, args) = self
+                .query
+                .upsert_item_property(item_id, name, value, is_custom);
+            sqlx::query_with(&sql, args)
+                .execute(&mut connection)
+                .await?;
         }
 
         connection.commit().await?;
@@ -501,46 +493,32 @@ impl MetadataStore {
     }
 
     async fn initialize_database(&mut self) -> Result<(), InitError> {
-        if sqlx::query(self.query.select_schema_version())
-            .fetch_all(&mut self.connection)
-            .await
-            .is_ok()
-        {
-            return Ok(());
-        }
+        let version = sqlx::query_scalar(self.query.select_schema_version())
+            .fetch_optional(&mut self.connection)
+            .await;
 
-        for query in self.query.create_tables() {
-            sqlx::query(query).execute(&mut self.connection).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn check_schema_version(&mut self) -> Result<(), InitError> {
-        let rows = sqlx::query(self.query.select_schema_version())
-            .fetch_all(&mut self.connection)
-            .await?;
-
-        if rows.is_empty() {
-            sqlx::query(self.query.insert_schema_version())
-                .bind(SCHEMA_VERSION)
-                .execute(&mut self.connection)
-                .await?;
-            return Ok(());
-        }
-
-        if rows.len() > 1 {
-            return Err(InitError::TooManyMlmdEnvRecords { count: rows.len() });
-        }
-
-        let version: i32 = rows[0].try_get("schema_version")?;
-        if version != SCHEMA_VERSION {
-            return Err(InitError::UnsupportedSchemaVersion {
-                actual: version,
+        match version {
+            Ok(Some(SCHEMA_VERSION)) => Ok(()),
+            Ok(Some(actual)) => Err(InitError::UnsupportedSchemaVersion {
+                actual,
                 expected: SCHEMA_VERSION,
-            });
+            }),
+            _ => {
+                let mut connection = self.connection.begin().await?;
+
+                for query in self.query.create_tables() {
+                    sqlx::query(query).execute(&mut connection).await?;
+                }
+
+                sqlx::query(self.query.insert_schema_version())
+                    .bind(SCHEMA_VERSION)
+                    .execute(&mut connection)
+                    .await?;
+
+                connection.commit().await?;
+                Ok(())
+            }
         }
-        Ok(())
     }
 
     pub(crate) async fn execute_put_type(

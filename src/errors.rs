@@ -10,9 +10,6 @@ pub enum InitError {
 
     #[error("schema version {actual} is not supported (supported version is {expected})")]
     UnsupportedSchemaVersion { actual: i32, expected: i32 },
-
-    #[error("there are {count} MLMDEnv records (only one record is expected)")]
-    TooManyMlmdEnvRecords { count: usize },
 }
 
 #[derive(Debug, thiserror::Error)]
