@@ -75,19 +75,19 @@ impl Query {
     }
 
     pub fn get_type_by_name(&self) -> &'static str {
-        "SELECT id, name FROM Type WHERE type_kind=$1 AND name=$2"
+        "SELECT id, name FROM Type WHERE type_kind=? AND name=?"
     }
 
     pub fn get_type_properties_by_type_id(&self) -> &'static str {
-        "SELECT type_id, name, data_type FROM TypeProperty WHERE type_id=$1"
+        "SELECT type_id, name, data_type FROM TypeProperty WHERE type_id=?"
     }
 
     pub fn insert_type(&self) -> &'static str {
-        "INSERT INTO Type (type_kind, name) VALUES ($1, $2)"
+        "INSERT INTO Type (type_kind, name) VALUES (?, ?)"
     }
 
     pub fn insert_type_property(&self) -> &'static str {
-        "INSERT INTO TypeProperty (type_id, name, data_type) VALUES ($1, $2, $3)"
+        "INSERT INTO TypeProperty (type_id, name, data_type) VALUES (?, ?, ?)"
     }
 
     pub fn check_context_id(&self) -> &'static str {
@@ -162,8 +162,8 @@ impl Query {
                 "FROM ArtifactProperty ",
                 "WHERE artifact_id IN ({})"
             ),
-            (1..=n_ids)
-                .map(|n| format!("${}", n))
+            (0..n_ids)
+                .map(|_| "?")
                 .collect::<Vec<_>>()
                 .join(",")
         )
@@ -261,8 +261,8 @@ impl Query {
                 "FROM ExecutionProperty ",
                 "WHERE execution_id IN ({})"
             ),
-            (1..=n_ids)
-                .map(|n| format!("${}", n))
+            (0..n_ids)
+                .map(|_| "?")
                 .collect::<Vec<_>>()
                 .join(",")
         )
@@ -371,8 +371,8 @@ impl Query {
                 "FROM ContextProperty ",
                 "WHERE context_id IN ({})"
             ),
-            (1..=n_ids)
-                .map(|n| format!("${}", n))
+            (0..n_ids)
+                .map(|_| "?")
                 .collect::<Vec<_>>()
                 .join(",")
         )
@@ -681,13 +681,13 @@ impl SqliteQuery {
             concat!(
                 "INSERT INTO ArtifactProperty ",
                 "(artifact_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
                 "ON CONFLICT (artifact_id, name, is_custom_property) ",
                 "DO UPDATE SET int_value={0}, double_value={1}, string_value={2}"
             ),
-            maybe_null(value.as_int().is_some(), "$4"),
-            maybe_null(value.as_double().is_some(), "$4"),
-            maybe_null(value.as_string().is_some(), "$4")
+            maybe_null(value.as_int().is_some(), "?"),
+            maybe_null(value.as_double().is_some(), "?"),
+            maybe_null(value.as_string().is_some(), "?")
         )
     }
 
@@ -696,13 +696,13 @@ impl SqliteQuery {
             concat!(
                 "INSERT INTO ExecutionProperty ",
                 "(execution_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
                 "ON CONFLICT (execution_id, name, is_custom_property) ",
                 "DO UPDATE SET int_value={0}, double_value={1}, string_value={2}"
             ),
-            maybe_null(value.as_int().is_some(), "$4"),
-            maybe_null(value.as_double().is_some(), "$4"),
-            maybe_null(value.as_string().is_some(), "$4")
+            maybe_null(value.as_int().is_some(), "?"),
+            maybe_null(value.as_double().is_some(), "?"),
+            maybe_null(value.as_string().is_some(), "?")
         )
     }
 
@@ -711,13 +711,13 @@ impl SqliteQuery {
             concat!(
                 "INSERT INTO ContextProperty ",
                 "(context_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
                 "ON CONFLICT (context_id, name, is_custom_property) ",
                 "DO UPDATE SET int_value={0}, double_value={1}, string_value={2}"
             ),
-            maybe_null(value.as_int().is_some(), "$4"),
-            maybe_null(value.as_double().is_some(), "$4"),
-            maybe_null(value.as_string().is_some(), "$4")
+            maybe_null(value.as_int().is_some(), "?"),
+            maybe_null(value.as_double().is_some(), "?"),
+            maybe_null(value.as_string().is_some(), "?")
         )
     }
 }
@@ -919,13 +919,13 @@ impl MysqlQuery {
             concat!(
                 "INSERT INTO ArtifactProperty ",
                 "(artifact_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
                 "ON DUPLICATE KEY ",
                 "UPDATE int_value={0}, double_value={1}, string_value={2}"
             ),
-            maybe_null(value.as_int().is_some(), "$4"),
-            maybe_null(value.as_double().is_some(), "$4"),
-            maybe_null(value.as_string().is_some(), "$4")
+            maybe_null(value.as_int().is_some(), "?"),
+            maybe_null(value.as_double().is_some(), "?"),
+            maybe_null(value.as_string().is_some(), "?")
         )
     }
 
@@ -934,13 +934,13 @@ impl MysqlQuery {
             concat!(
                 "INSERT INTO ExecutionProperty ",
                 "(execution_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
                 "ON DUPLICATE KEY ",
                 "UPDATE int_value={0}, double_value={1}, string_value={2}"
             ),
-            maybe_null(value.as_int().is_some(), "$4"),
-            maybe_null(value.as_double().is_some(), "$4"),
-            maybe_null(value.as_string().is_some(), "$4")
+            maybe_null(value.as_int().is_some(), "?"),
+            maybe_null(value.as_double().is_some(), "?"),
+            maybe_null(value.as_string().is_some(), "?")
         )
     }
 
@@ -949,13 +949,13 @@ impl MysqlQuery {
             concat!(
                 "INSERT INTO ContextProperty ",
                 "(context_id, name, is_custom_property, int_value, double_value, string_value) ",
-                "VALUES ($1, $2, $3, {0}, {1}, {2}) ",
+                "VALUES (?, ?, ?, {0}, {1}, {2}) ",
                 "ON DUPLICATE KEY ",
                 "UPDATE int_value={0}, double_value={1}, string_value={2}"
             ),
-            maybe_null(value.as_int().is_some(), "$4"),
-            maybe_null(value.as_double().is_some(), "$4"),
-            maybe_null(value.as_string().is_some(), "$4")
+            maybe_null(value.as_int().is_some(), "?"),
+            maybe_null(value.as_double().is_some(), "?"),
+            maybe_null(value.as_string().is_some(), "?")
         )
     }
 }

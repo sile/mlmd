@@ -23,22 +23,32 @@ impl std::fmt::Display for Id {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropertyType {
-    Unknown = 0,
+    // TODO: Unknown = 0,
     Int = 1,
     Double = 2,
     String = 3,
 }
 
 impl PropertyType {
-    pub fn from_i32(value: i32) -> Result<Self, sqlx::Error> {
+    pub(crate) fn from_i32(value: i32) -> Result<Self, sqlx::Error> {
         match value {
-            0 => Ok(Self::Unknown),
+            // 0 => Ok(Self::Unknown),
             1 => Ok(Self::Int),
             2 => Ok(Self::Double),
             3 => Ok(Self::String),
             _ => Err(sqlx::Error::Decode(
                 anyhow::anyhow!("property type {} is undefined", value).into(),
             )),
+        }
+    }
+}
+
+impl std::fmt::Display for PropertyType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Int => write!(f, "int"),
+            Self::Double => write!(f, "double"),
+            Self::String => write!(f, "string"),
         }
     }
 }

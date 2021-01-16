@@ -128,9 +128,9 @@ impl MetadataStore {
             let sql = generator.generate_upsert_item_property(value);
             let mut query = sqlx::query(&sql).bind(item_id).bind(name).bind(is_custom);
             query = match value {
-                Value::Int(v) => query.bind(*v),
-                Value::Double(v) => query.bind(*v),
-                Value::String(v) => query.bind(v),
+                Value::Int(v) => query.bind(*v).bind(*v),
+                Value::Double(v) => query.bind(*v).bind(*v),
+                Value::String(v) => query.bind(v).bind(v),
             };
             query.execute(&mut connection).await?;
         }
@@ -186,6 +186,7 @@ impl MetadataStore {
                     type_kind: T::TYPE_KIND,
                     item_id,
                     property_name: name.clone(),
+                    property_type: value.ty(),
                 });
             }
         }
@@ -244,9 +245,9 @@ impl MetadataStore {
                 .bind(name)
                 .bind(is_custom);
             query = match value {
-                Value::Int(v) => query.bind(*v),
-                Value::Double(v) => query.bind(*v),
-                Value::String(v) => query.bind(v),
+                Value::Int(v) => query.bind(*v).bind(*v),
+                Value::Double(v) => query.bind(*v).bind(*v),
+                Value::String(v) => query.bind(v).bind(v),
             };
             query.execute(&mut connection).await?;
         }

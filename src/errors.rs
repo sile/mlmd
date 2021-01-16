@@ -1,4 +1,4 @@
-use crate::metadata::Id;
+use crate::metadata::{Id, PropertyType};
 
 pub use crate::query::TypeKind;
 
@@ -41,11 +41,12 @@ pub enum PutError {
         type_name: String,
     },
 
-    #[error("{type_kind} {item_id} has an undefined property {property_name:?}")]
+    #[error("{type_kind} {item_id} has an undefined property {property_name:?}({property_type})")]
     UndefinedProperty {
         type_kind: TypeKind,
         item_id: Id,
         property_name: String,
+        property_type: PropertyType,
     },
 
     #[error("{type_kind} {item_id} has a name {item_name:?} that already exists")]
