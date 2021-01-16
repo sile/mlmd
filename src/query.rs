@@ -1,13 +1,13 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
 use crate::metadata::{
-    self, ArtifactState, EventStep, ExecutionState, Id, PropertyValue, TypeId, TypeKind,
+    self, ArtifactState, EventStep, ExecutionState, Id, PropertyValue, PropertyValues, TypeId,
+    TypeKind,
 };
 use crate::metadata_store::options::{
     self, ArtifactOptions, ExecutionOptions, GetArtifactsOptions, GetContextsOptions,
     GetEventsOptions, GetExecutionsOptions, GetTypesOptions,
 };
 use sqlx::database::HasArguments;
-use std::collections::BTreeMap;
 use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone)]
@@ -1127,8 +1127,8 @@ pub trait PostItemQueryGenerator {
     const TYPE_KIND: TypeKind;
 
     fn item_name(&self) -> Option<&str>;
-    fn item_properties(&self) -> &BTreeMap<String, PropertyValue>;
-    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue>;
+    fn item_properties(&self) -> &PropertyValues;
+    fn item_custom_properties(&self) -> &PropertyValues;
     fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
     fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>);
     fn generate_last_item_id(&self) -> &'static str;
@@ -1149,11 +1149,11 @@ impl PostItemQueryGenerator for PostArtifactQueryGenerator {
         self.options.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_properties(&self) -> &PropertyValues {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_custom_properties(&self) -> &PropertyValues {
         &self.options.custom_properties
     }
 
@@ -1209,11 +1209,11 @@ impl PostItemQueryGenerator for PostExecutionQueryGenerator {
         self.options.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_properties(&self) -> &PropertyValues {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_custom_properties(&self) -> &PropertyValues {
         &self.options.custom_properties
     }
 
@@ -1270,11 +1270,11 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
         Some(self.name.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_properties(&self) -> &PropertyValues {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_custom_properties(&self) -> &PropertyValues {
         &self.options.custom_properties
     }
 
@@ -1310,8 +1310,8 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
 
 pub trait PutItemQueryGenerator {
     fn item_name(&self) -> Option<&str>;
-    fn item_properties(&self) -> &BTreeMap<String, PropertyValue>;
-    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue>;
+    fn item_properties(&self) -> &PropertyValues;
+    fn item_custom_properties(&self) -> &PropertyValues;
     fn generate_get_type_id_query(&self) -> &'static str;
     fn generate_check_item_name_query(
         &self,
@@ -1332,11 +1332,11 @@ impl PutItemQueryGenerator for PutArtifactQueryGenerator {
         self.options.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_properties(&self) -> &PropertyValues {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_custom_properties(&self) -> &PropertyValues {
         &self.options.custom_properties
     }
 
@@ -1400,11 +1400,11 @@ impl PutItemQueryGenerator for PutExecutionQueryGenerator {
         self.options.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_properties(&self) -> &PropertyValues {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_custom_properties(&self) -> &PropertyValues {
         &self.options.custom_properties
     }
 
@@ -1459,11 +1459,11 @@ impl PutItemQueryGenerator for PutContextQueryGenerator {
         self.options.name.as_ref().map(|n| n.as_str())
     }
 
-    fn item_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_properties(&self) -> &PropertyValues {
         &self.options.properties
     }
 
-    fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue> {
+    fn item_custom_properties(&self) -> &PropertyValues {
         &self.options.custom_properties
     }
 

@@ -2,7 +2,7 @@ use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeO
 use crate::errors::{GetError, InitError, PostError, PutError};
 use crate::metadata::{
     ArtifactId, ContextId, Event, EventStep, EventType, ExecutionId, Id, PropertyType,
-    PropertyValue, TypeId, TypeKind,
+    PropertyTypes, PropertyValue, TypeId, TypeKind,
 };
 use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query};
 use crate::requests;
@@ -155,7 +155,7 @@ impl MetadataStore {
         &mut self,
         type_kind: TypeKind,
         type_id: TypeId,
-    ) -> Result<Option<BTreeMap<String, PropertyType>>, GetError> {
+    ) -> Result<Option<PropertyTypes>, GetError> {
         Ok(self
             .get_types(
                 type_kind,
@@ -602,7 +602,7 @@ impl MetadataStore {
         options: GetTypesOptions,
     ) -> Result<Vec<T>, GetError>
     where
-        F: Fn(TypeId, String, BTreeMap<String, PropertyType>) -> T,
+        F: Fn(TypeId, String, PropertyTypes) -> T,
     {
         let sql = self.query.get_types(&options);
         let mut query = sqlx::query_as::<_, query::Type>(&sql).bind(type_kind as i32);

@@ -1,9 +1,8 @@
 use crate::metadata::{
     ArtifactId, ArtifactState, ContextId, EventStep, EventType, ExecutionId, ExecutionState,
-    PropertyType, PropertyValue, TypeId,
+    PropertyTypes, PropertyValues, TypeId,
 };
 use crate::query::QueryValue;
-use std::collections::BTreeMap;
 use std::time::{Duration, UNIX_EPOCH};
 
 #[derive(Debug, Default, Clone)]
@@ -25,15 +24,15 @@ impl GetTypesOptions {
 pub struct PutTypeOptions {
     pub can_add_fields: bool,
     pub can_omit_fields: bool,
-    pub properties: BTreeMap<String, PropertyType>,
+    pub properties: PropertyTypes,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct ArtifactOptions {
     pub(crate) name: Option<String>,
     pub(crate) uri: Option<String>,
-    pub(crate) properties: BTreeMap<String, PropertyValue>,
-    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
+    pub(crate) properties: PropertyValues,
+    pub(crate) custom_properties: PropertyValues,
     pub(crate) state: Option<ArtifactState>,
 }
 
@@ -98,8 +97,8 @@ impl GetExecutionsOptions {
 #[derive(Debug, Clone, Default)]
 pub struct ExecutionOptions {
     pub(crate) name: Option<String>,
-    pub(crate) properties: BTreeMap<String, PropertyValue>,
-    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
+    pub(crate) properties: PropertyValues,
+    pub(crate) custom_properties: PropertyValues,
     pub(crate) last_known_state: Option<ExecutionState>,
 }
 
@@ -137,8 +136,8 @@ impl GetContextsOptions {
 #[derive(Debug, Clone, Default)]
 pub struct ContextOptions {
     pub(crate) name: Option<String>,
-    pub(crate) properties: BTreeMap<String, PropertyValue>,
-    pub(crate) custom_properties: BTreeMap<String, PropertyValue>,
+    pub(crate) properties: PropertyValues,
+    pub(crate) custom_properties: PropertyValues,
 }
 
 #[derive(Debug, Clone)]

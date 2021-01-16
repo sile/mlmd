@@ -2,11 +2,10 @@ use crate::errors;
 use crate::metadata::{
     Artifact, ArtifactId, ArtifactState, ArtifactType, Context, ContextId, ContextType, Event,
     EventStep, EventType, Execution, ExecutionId, ExecutionState, ExecutionType, Id, PropertyType,
-    PropertyValue, TypeId, TypeKind,
+    PropertyTypes, PropertyValue, PropertyValues, TypeId, TypeKind,
 };
 use crate::metadata_store::{options, MetadataStore};
 use crate::query;
-use std::collections::BTreeMap;
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -35,7 +34,7 @@ impl<'a> PutArtifactTypeRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyType>) -> Self {
+    pub fn properties(mut self, properties: PropertyTypes) -> Self {
         self.options.properties = properties;
         self
     }
@@ -122,7 +121,7 @@ impl<'a> PutExecutionTypeRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyType>) -> Self {
+    pub fn properties(mut self, properties: PropertyTypes) -> Self {
         self.options.properties = properties;
         self
     }
@@ -209,7 +208,7 @@ impl<'a> PutContextTypeRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyType>) -> Self {
+    pub fn properties(mut self, properties: PropertyTypes) -> Self {
         self.options.properties = properties;
         self
     }
@@ -453,12 +452,12 @@ impl<'a> PostArtifactRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
@@ -520,12 +519,12 @@ impl<'a> PostExecutionRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
@@ -584,12 +583,12 @@ impl<'a> PostContextRequest<'a> {
         }
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
@@ -652,12 +651,12 @@ impl<'a> PutArtifactRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
@@ -715,12 +714,12 @@ impl<'a> PutExecutionRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
@@ -778,12 +777,12 @@ impl<'a> PutContextRequest<'a> {
         self
     }
 
-    pub fn properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
-    pub fn custom_properties(mut self, properties: BTreeMap<String, PropertyValue>) -> Self {
+    pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }

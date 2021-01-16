@@ -126,7 +126,8 @@ impl std::fmt::Display for Id {
     }
 }
 
-// TODO: Add `PropertyTypes` and `PropertyValues`
+pub type PropertyTypes = BTreeMap<String, PropertyType>;
+pub type PropertyValues = BTreeMap<String, PropertyValue>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PropertyType {
@@ -164,22 +165,21 @@ impl std::fmt::Display for PropertyType {
 pub struct ArtifactType {
     pub id: TypeId,
     pub name: String,
-    pub properties: BTreeMap<String, PropertyType>,
+    pub properties: PropertyTypes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExecutionType {
     pub id: TypeId,
     pub name: String,
-    pub properties: BTreeMap<String, PropertyType>,
-    // TODO: input_type, output_type
+    pub properties: PropertyTypes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ContextType {
     pub id: TypeId,
     pub name: String,
-    pub properties: BTreeMap<String, PropertyType>,
+    pub properties: PropertyTypes,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -253,8 +253,8 @@ pub struct Artifact {
     pub type_id: TypeId,
     pub name: Option<String>,
     pub uri: Option<String>,
-    pub properties: BTreeMap<String, PropertyValue>,
-    pub custom_properties: BTreeMap<String, PropertyValue>,
+    pub properties: PropertyValues,
+    pub custom_properties: PropertyValues,
     pub state: ArtifactState,
     pub create_time_since_epoch: Duration,
     pub last_update_time_since_epoch: Duration,
@@ -320,8 +320,8 @@ pub struct Execution {
     pub type_id: TypeId,
     pub name: Option<String>,
     pub last_known_state: ExecutionState,
-    pub properties: BTreeMap<String, PropertyValue>,
-    pub custom_properties: BTreeMap<String, PropertyValue>,
+    pub properties: PropertyValues,
+    pub custom_properties: PropertyValues,
     pub create_time_since_epoch: Duration,
     pub last_update_time_since_epoch: Duration,
 }
@@ -388,8 +388,8 @@ pub struct Context {
     pub id: ContextId,
     pub type_id: TypeId,
     pub name: String,
-    pub properties: BTreeMap<String, PropertyValue>,
-    pub custom_properties: BTreeMap<String, PropertyValue>,
+    pub properties: PropertyValues,
+    pub custom_properties: PropertyValues,
     pub create_time_since_epoch: Duration,
     pub last_update_time_since_epoch: Duration,
 }
