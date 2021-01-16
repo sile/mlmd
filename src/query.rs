@@ -1,5 +1,5 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, EventStep, Id, PropertyValue, TypeId};
+use crate::metadata::{self, EventStep, Id, PropertyValue, TypeId, TypeKind};
 use crate::metadata_store::options::{
     self, GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
     GetTypesOptions, PostArtifactOptions, PostExecutionOptions,
@@ -938,23 +938,6 @@ pub struct TypeProperty {
     pub data_type: i32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TypeKind {
-    Execution = 0,
-    Artifact = 1,
-    Context = 2,
-}
-
-impl std::fmt::Display for TypeKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Execution => write!(f, "execution"),
-            Self::Artifact => write!(f, "artifact"),
-            Self::Context => write!(f, "context"),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum QueryValue<'a> {
     Int(i32),
@@ -1313,8 +1296,6 @@ impl PostItemQueryGenerator for PostContextQueryGenerator {
 }
 
 pub trait PutItemQueryGenerator {
-    const TYPE_KIND: TypeKind;
-
     fn item_name(&self) -> Option<&str>;
     fn item_properties(&self) -> &BTreeMap<String, PropertyValue>;
     fn item_custom_properties(&self) -> &BTreeMap<String, PropertyValue>;
@@ -1334,8 +1315,6 @@ pub struct PutArtifactQueryGenerator {
 }
 
 impl PutItemQueryGenerator for PutArtifactQueryGenerator {
-    const TYPE_KIND: TypeKind = TypeKind::Artifact;
-
     fn item_name(&self) -> Option<&str> {
         self.options.name.as_ref().map(|n| n.as_str())
     }
@@ -1404,8 +1383,6 @@ pub struct PutExecutionQueryGenerator {
 }
 
 impl PutItemQueryGenerator for PutExecutionQueryGenerator {
-    const TYPE_KIND: TypeKind = TypeKind::Execution;
-
     fn item_name(&self) -> Option<&str> {
         self.options.name.as_ref().map(|n| n.as_str())
     }
@@ -1465,8 +1442,6 @@ pub struct PutContextQueryGenerator {
 }
 
 impl PutItemQueryGenerator for PutContextQueryGenerator {
-    const TYPE_KIND: TypeKind = TypeKind::Context;
-
     fn item_name(&self) -> Option<&str> {
         self.options.name.as_ref().map(|n| n.as_str())
     }

@@ -1,7 +1,8 @@
 use crate::errors;
 use crate::metadata::{
-    Artifact, ArtifactState, ArtifactType, Context, ContextType, Event, EventStep, EventType,
-    Execution, ExecutionState, ExecutionType, Id, PropertyType, PropertyValue, TypeId,
+    Artifact, ArtifactId, ArtifactState, ArtifactType, Context, ContextId, ContextType, Event,
+    EventStep, EventType, Execution, ExecutionId, ExecutionState, ExecutionType, Id, PropertyType,
+    PropertyValue, TypeId, TypeKind,
 };
 use crate::metadata_store::{options, MetadataStore};
 use crate::query;
@@ -46,7 +47,7 @@ impl<'a> PutArtifactTypeRequest<'a> {
 
     pub async fn execute(self) -> Result<TypeId, errors::PutError> {
         self.store
-            .put_type(query::TypeKind::Artifact, &self.type_name, self.options)
+            .put_type(TypeKind::Artifact, &self.type_name, self.options)
             .await
     }
 }
@@ -83,7 +84,7 @@ impl<'a> GetArtifactTypesRequest<'a> {
     pub async fn execute(self) -> Result<Vec<ArtifactType>, errors::GetError> {
         self.store
             .get_types(
-                query::TypeKind::Artifact,
+                TypeKind::Artifact,
                 |id, name, properties| ArtifactType {
                     id,
                     name,
@@ -133,7 +134,7 @@ impl<'a> PutExecutionTypeRequest<'a> {
 
     pub async fn execute(self) -> Result<TypeId, errors::PutError> {
         self.store
-            .put_type(query::TypeKind::Execution, &self.type_name, self.options)
+            .put_type(TypeKind::Execution, &self.type_name, self.options)
             .await
     }
 }
@@ -170,7 +171,7 @@ impl<'a> GetExecutionTypesRequest<'a> {
     pub async fn execute(self) -> Result<Vec<ExecutionType>, errors::GetError> {
         self.store
             .get_types(
-                query::TypeKind::Execution,
+                TypeKind::Execution,
                 |id, name, properties| ExecutionType {
                     id,
                     name,
@@ -220,7 +221,7 @@ impl<'a> PutContextTypeRequest<'a> {
 
     pub async fn execute(self) -> Result<TypeId, errors::PutError> {
         self.store
-            .put_type(query::TypeKind::Context, &self.type_name, self.options)
+            .put_type(TypeKind::Context, &self.type_name, self.options)
             .await
     }
 }
@@ -257,7 +258,7 @@ impl<'a> GetContextTypesRequest<'a> {
     pub async fn execute(self) -> Result<Vec<ContextType>, errors::GetError> {
         self.store
             .get_types(
-                query::TypeKind::Context,
+                TypeKind::Context,
                 |id, name, properties| ContextType {
                     id,
                     name,
@@ -294,12 +295,12 @@ impl<'a> GetArtifactsRequest<'a> {
         self
     }
 
-    pub fn id(mut self, artifact_id: Id) -> Self {
+    pub fn id(mut self, artifact_id: ArtifactId) -> Self {
         self.options.artifact_ids.push(artifact_id);
         self
     }
 
-    pub fn ids(mut self, artifact_ids: &[Id]) -> Self {
+    pub fn ids(mut self, artifact_ids: &[ArtifactId]) -> Self {
         self.options.artifact_ids.extend(artifact_ids);
         self
     }
@@ -309,7 +310,7 @@ impl<'a> GetArtifactsRequest<'a> {
         self
     }
 
-    pub fn context(mut self, context_id: Id) -> Self {
+    pub fn context(mut self, context_id: ContextId) -> Self {
         self.options.context_id = Some(context_id);
         self
     }
@@ -348,17 +349,17 @@ impl<'a> GetExecutionsRequest<'a> {
         self
     }
 
-    pub fn id(mut self, execution_id: Id) -> Self {
+    pub fn id(mut self, execution_id: ExecutionId) -> Self {
         self.options.execution_ids.push(execution_id);
         self
     }
 
-    pub fn ids(mut self, execution_ids: &[Id]) -> Self {
+    pub fn ids(mut self, execution_ids: &[ExecutionId]) -> Self {
         self.options.execution_ids.extend(execution_ids);
         self
     }
 
-    pub fn context(mut self, context_id: Id) -> Self {
+    pub fn context(mut self, context_id: ContextId) -> Self {
         self.options.context_id = Some(context_id);
         self
     }
@@ -397,22 +398,22 @@ impl<'a> GetContextsRequest<'a> {
         self
     }
 
-    pub fn id(mut self, context_id: Id) -> Self {
+    pub fn id(mut self, context_id: ContextId) -> Self {
         self.options.context_ids.push(context_id);
         self
     }
 
-    pub fn ids(mut self, context_ids: &[Id]) -> Self {
+    pub fn ids(mut self, context_ids: &[ContextId]) -> Self {
         self.options.context_ids.extend(context_ids);
         self
     }
 
-    pub fn artifact(mut self, artifact_id: Id) -> Self {
+    pub fn artifact(mut self, artifact_id: ArtifactId) -> Self {
         self.options.artifact_id = Some(artifact_id);
         self
     }
 
-    pub fn execution(mut self, execution_id: Id) -> Self {
+    pub fn execution(mut self, execution_id: ExecutionId) -> Self {
         self.options.execution_id = Some(execution_id);
         self
     }
@@ -495,13 +496,16 @@ impl<'a> PostArtifactRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PostError> {
+    pub async fn execute(self) -> Result<ArtifactId, errors::PostError> {
         let generator = query::PostArtifactQueryGenerator {
             query: self.store.query.clone(),
             type_id: self.type_id,
             options: self.options,
         };
-        self.store.post_item(self.type_id, generator).await
+        self.store
+            .post_item(self.type_id, generator)
+            .await
+            .map(ArtifactId::new)
     }
 }
 
@@ -569,13 +573,16 @@ impl<'a> PostExecutionRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PostError> {
+    pub async fn execute(self) -> Result<ExecutionId, errors::PostError> {
         let generator = query::PostExecutionQueryGenerator {
             query: self.store.query.clone(),
             type_id: self.type_id,
             options: self.options,
         };
-        self.store.post_item(self.type_id, generator).await
+        self.store
+            .post_item(self.type_id, generator)
+            .await
+            .map(ExecutionId::new)
     }
 }
 
@@ -636,26 +643,29 @@ impl<'a> PostContextRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<Id, errors::PostError> {
+    pub async fn execute(self) -> Result<ContextId, errors::PostError> {
         let generator = query::PostContextQueryGenerator {
             query: self.store.query.clone(),
             type_id: self.type_id,
             name: self.name,
             options: self.options,
         };
-        self.store.post_item(self.type_id, generator).await
+        self.store
+            .post_item(self.type_id, generator)
+            .await
+            .map(ContextId::new)
     }
 }
 
 #[derive(Debug)]
 pub struct PutArtifactRequest<'a> {
     store: &'a mut MetadataStore,
-    id: Id,
+    id: ArtifactId,
     options: options::ArtifactOptions,
 }
 
 impl<'a> PutArtifactRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, id: Id) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore, id: ArtifactId) -> Self {
         Self {
             store,
             id,
@@ -711,19 +721,19 @@ impl<'a> PutArtifactRequest<'a> {
             query: self.store.query.clone(),
             options: self.options,
         };
-        self.store.put_item(self.id, generator).await
+        self.store.put_item(Id::Artifact(self.id), generator).await
     }
 }
 
 #[derive(Debug)]
 pub struct PutExecutionRequest<'a> {
     store: &'a mut MetadataStore,
-    id: Id,
+    id: ExecutionId,
     options: options::ExecutionOptions,
 }
 
 impl<'a> PutExecutionRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, id: Id) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore, id: ExecutionId) -> Self {
         Self {
             store,
             id,
@@ -774,19 +784,19 @@ impl<'a> PutExecutionRequest<'a> {
             query: self.store.query.clone(),
             options: self.options,
         };
-        self.store.put_item(self.id, generator).await
+        self.store.put_item(Id::Execution(self.id), generator).await
     }
 }
 
 #[derive(Debug)]
 pub struct PutContextRequest<'a> {
     store: &'a mut MetadataStore,
-    id: Id,
+    id: ContextId,
     options: options::ContextOptions,
 }
 
 impl<'a> PutContextRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, id: Id) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore, id: ContextId) -> Self {
         Self {
             store,
             id,
@@ -832,19 +842,23 @@ impl<'a> PutContextRequest<'a> {
             query: self.store.query.clone(),
             options: self.options,
         };
-        self.store.put_item(self.id, generator).await
+        self.store.put_item(Id::Context(self.id), generator).await
     }
 }
 
 #[derive(Debug)]
 pub struct PutAttributionRequest<'a> {
     store: &'a mut MetadataStore,
-    context_id: Id,
-    artifact_id: Id,
+    context_id: ContextId,
+    artifact_id: ArtifactId,
 }
 
 impl<'a> PutAttributionRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, context_id: Id, artifact_id: Id) -> Self {
+    pub(crate) fn new(
+        store: &'a mut MetadataStore,
+        context_id: ContextId,
+        artifact_id: ArtifactId,
+    ) -> Self {
         Self {
             store,
             context_id,
@@ -854,7 +868,7 @@ impl<'a> PutAttributionRequest<'a> {
 
     pub async fn execute(self) -> Result<(), errors::PutError> {
         self.store
-            .put_relation(self.context_id, self.artifact_id, true)
+            .put_relation(self.context_id, Id::Artifact(self.artifact_id))
             .await
     }
 }
@@ -862,12 +876,16 @@ impl<'a> PutAttributionRequest<'a> {
 #[derive(Debug)]
 pub struct PutAssociationRequest<'a> {
     store: &'a mut MetadataStore,
-    context_id: Id,
-    execution_id: Id,
+    context_id: ContextId,
+    execution_id: ExecutionId,
 }
 
 impl<'a> PutAssociationRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, context_id: Id, execution_id: Id) -> Self {
+    pub(crate) fn new(
+        store: &'a mut MetadataStore,
+        context_id: ContextId,
+        execution_id: ExecutionId,
+    ) -> Self {
         Self {
             store,
             context_id,
@@ -877,7 +895,7 @@ impl<'a> PutAssociationRequest<'a> {
 
     pub async fn execute(self) -> Result<(), errors::PutError> {
         self.store
-            .put_relation(self.context_id, self.execution_id, false)
+            .put_relation(self.context_id, Id::Execution(self.execution_id))
             .await
     }
 }
@@ -885,13 +903,17 @@ impl<'a> PutAssociationRequest<'a> {
 #[derive(Debug)]
 pub struct PutEventRequest<'a> {
     store: &'a mut MetadataStore,
-    execution_id: Id,
-    artifact_id: Id,
+    execution_id: ExecutionId,
+    artifact_id: ArtifactId,
     options: options::PutEventOptions,
 }
 
 impl<'a> PutEventRequest<'a> {
-    pub(crate) fn new(store: &'a mut MetadataStore, execution_id: Id, artifact_id: Id) -> Self {
+    pub(crate) fn new(
+        store: &'a mut MetadataStore,
+        execution_id: ExecutionId,
+        artifact_id: ArtifactId,
+    ) -> Self {
         Self {
             store,
             execution_id,
@@ -941,22 +963,22 @@ impl<'a> GetEventsRequest<'a> {
         }
     }
 
-    pub fn execution(mut self, id: Id) -> Self {
+    pub fn execution(mut self, id: ExecutionId) -> Self {
         self.options.execution_ids.push(id);
         self
     }
 
-    pub fn executions(mut self, ids: &[Id]) -> Self {
+    pub fn executions(mut self, ids: &[ExecutionId]) -> Self {
         self.options.execution_ids.extend(ids);
         self
     }
 
-    pub fn artifact(mut self, id: Id) -> Self {
+    pub fn artifact(mut self, id: ArtifactId) -> Self {
         self.options.artifact_ids.push(id);
         self
     }
 
-    pub fn artifacts(mut self, ids: &[Id]) -> Self {
+    pub fn artifacts(mut self, ids: &[ArtifactId]) -> Self {
         self.options.artifact_ids.extend(ids);
         self
     }

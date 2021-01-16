@@ -1,7 +1,10 @@
 use self::options::{GetEventsOptions, GetTypesOptions, PutEventOptions, PutTypeOptions};
 use crate::errors::{GetError, InitError, PostError, PutError};
-use crate::metadata::{Event, EventStep, EventType, Id, PropertyType, PropertyValue, TypeId};
-use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query, TypeKind};
+use crate::metadata::{
+    ArtifactId, ContextId, Event, EventStep, EventType, ExecutionId, Id, PropertyType,
+    PropertyValue, TypeId, TypeKind,
+};
+use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query};
 use crate::requests;
 use futures::TryStreamExt as _;
 use sqlx::FromRow as _;
@@ -67,7 +70,7 @@ impl MetadataStore {
         &mut self,
         type_id: TypeId,
         generator: T,
-    ) -> Result<Id, PostError>
+    ) -> Result<i32, PostError>
     where
         T: query::PostItemQueryGenerator,
     {
@@ -137,7 +140,7 @@ impl MetadataStore {
         }
 
         connection.commit().await?;
-        Ok(Id::new(item_id))
+        Ok(item_id)
     }
 
     pub fn post_artifact(&mut self, type_id: TypeId) -> requests::PostArtifactRequest {
@@ -168,28 +171,21 @@ impl MetadataStore {
     where
         T: query::PutItemQueryGenerator,
     {
+        let type_kind = item_id.kind();
         let type_id = sqlx::query_scalar(generator.generate_get_type_id_query())
             .bind(item_id.get())
             .fetch_optional(&mut self.connection)
             .await?
             .map(TypeId::new)
-            .ok_or_else(|| PutError::NotFound {
-                type_kind: T::TYPE_KIND,
-                item_id,
-            })?;
+            .ok_or_else(|| PutError::NotFound { item_id })?;
 
         let property_types = self
-            .get_type_properties(T::TYPE_KIND, type_id)
+            .get_type_properties(type_kind, type_id)
             .await?
-            .ok_or_else(|| PutError::TypeNotFound {
-                type_kind: T::TYPE_KIND,
-                type_id,
-                item_id,
-            })?;
+            .ok_or_else(|| PutError::TypeNotFound { type_id, item_id })?;
         for (name, value) in generator.item_properties() {
             if property_types.get(name).copied() != Some(value.ty()) {
                 return Err(PutError::UndefinedProperty {
-                    type_kind: T::TYPE_KIND,
                     item_id,
                     property_name: name.clone(),
                     property_type: value.ty(),
@@ -207,7 +203,6 @@ impl MetadataStore {
                 .await?;
             if count > 0 {
                 return Err(PutError::NameAlreadyExists {
-                    type_kind: T::TYPE_KIND,
                     item_id,
                     item_name: generator.item_name().expect("bug").to_owned(),
                 });
@@ -249,7 +244,7 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub fn put_artifact(&mut self, artifact_id: Id) -> requests::PutArtifactRequest {
+    pub fn put_artifact(&mut self, artifact_id: ArtifactId) -> requests::PutArtifactRequest {
         requests::PutArtifactRequest::new(self, artifact_id)
     }
 
@@ -294,7 +289,7 @@ impl MetadataStore {
         requests::PostExecutionRequest::new(self, type_id)
     }
 
-    pub fn put_execution(&mut self, execution_id: Id) -> requests::PutExecutionRequest {
+    pub fn put_execution(&mut self, execution_id: ExecutionId) -> requests::PutExecutionRequest {
         requests::PutExecutionRequest::new(self, execution_id)
     }
 
@@ -310,7 +305,7 @@ impl MetadataStore {
         requests::PostContextRequest::new(self, type_id, context_name)
     }
 
-    pub fn put_context(&mut self, context_id: Id) -> requests::PutContextRequest {
+    pub fn put_context(&mut self, context_id: ContextId) -> requests::PutContextRequest {
         requests::PutContextRequest::new(self, context_id)
     }
 
@@ -320,18 +315,17 @@ impl MetadataStore {
 
     pub(crate) async fn put_relation(
         &mut self,
-        context_id: Id,
+        context_id: ContextId,
         item_id: Id,
-        is_attribution: bool,
     ) -> Result<(), PutError> {
+        let is_attribution = matches!(item_id, Id::Artifact(_));
         let count: i32 = sqlx::query_scalar(self.query.check_context_id())
             .bind(context_id.get())
             .fetch_one(&mut self.connection)
             .await?;
         if count == 0 {
             return Err(PutError::NotFound {
-                type_kind: TypeKind::Context,
-                item_id: context_id,
+                item_id: Id::Context(context_id),
             });
         }
 
@@ -344,12 +338,7 @@ impl MetadataStore {
         .fetch_one(&mut self.connection)
         .await?;
         if count == 0 {
-            let type_kind = if is_attribution {
-                TypeKind::Artifact
-            } else {
-                TypeKind::Execution
-            };
-            return Err(PutError::NotFound { type_kind, item_id });
+            return Err(PutError::NotFound { item_id });
         }
 
         // TODO: check AlreadyExists (error or ignore)
@@ -368,29 +357,33 @@ impl MetadataStore {
 
     pub fn put_attribution(
         &mut self,
-        context_id: Id,
-        artifact_id: Id,
+        context_id: ContextId,
+        artifact_id: ArtifactId,
     ) -> requests::PutAttributionRequest {
         requests::PutAttributionRequest::new(self, context_id, artifact_id)
     }
 
     pub fn put_association(
         &mut self,
-        context_id: Id,
-        execution_id: Id,
+        context_id: ContextId,
+        execution_id: ExecutionId,
     ) -> requests::PutAssociationRequest {
         requests::PutAssociationRequest::new(self, context_id, execution_id)
     }
 
-    pub fn put_event(&mut self, execution_id: Id, artifact_id: Id) -> requests::PutEventRequest {
+    pub fn put_event(
+        &mut self,
+        execution_id: ExecutionId,
+        artifact_id: ArtifactId,
+    ) -> requests::PutEventRequest {
         requests::PutEventRequest::new(self, execution_id, artifact_id)
     }
 
     // TODO: rename
     pub(crate) async fn execute_put_event(
         &mut self,
-        execution_id: Id,
-        artifact_id: Id,
+        execution_id: ExecutionId,
+        artifact_id: ArtifactId,
         options: PutEventOptions,
     ) -> Result<(), PutError> {
         let count: i32 = sqlx::query_scalar(self.query.check_execution_id())
@@ -399,8 +392,7 @@ impl MetadataStore {
             .await?;
         if count == 0 {
             return Err(PutError::NotFound {
-                type_kind: TypeKind::Execution,
-                item_id: execution_id,
+                item_id: Id::Execution(execution_id),
             });
         }
 
@@ -410,8 +402,7 @@ impl MetadataStore {
             .await?;
         if count == 0 {
             return Err(PutError::NotFound {
-                type_kind: TypeKind::Artifact,
-                item_id: artifact_id,
+                item_id: Id::Artifact(artifact_id),
             });
         }
 
@@ -464,8 +455,8 @@ impl MetadataStore {
             events.insert(
                 row.id,
                 Event {
-                    artifact_id: Id::new(row.artifact_id),
-                    execution_id: Id::new(row.execution_id),
+                    artifact_id: ArtifactId::new(row.artifact_id),
+                    execution_id: ExecutionId::new(row.execution_id),
                     path: Vec::new(),
                     ty: EventType::from_i32(row.ty)?,
                     create_time_since_epoch: Duration::from_millis(

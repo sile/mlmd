@@ -133,13 +133,13 @@ async fn get_artifacts_works() -> anyhow::Result<()> {
     assert_eq!(artifacts, vec![artifact0()]);
 
     // By ID.
-    let unregistered_id = Id::new(100);
+    let unregistered_id = ArtifactId::new(100);
     let artifacts = store
         .get_artifacts()
-        .ids(&[Id::new(2), unregistered_id])
+        .ids(&[ArtifactId::new(2), unregistered_id])
         .execute()
         .await?;
-    assert_eq!(artifacts[0].id, Id::new(2));
+    assert_eq!(artifacts[0].id.get(), 2);
     assert_eq!(artifacts, vec![artifact1()]);
 
     // By URI.
@@ -151,7 +151,11 @@ async fn get_artifacts_works() -> anyhow::Result<()> {
     assert_eq!(artifacts, vec![artifact1()]);
 
     // By Context.
-    let artifacts = store.get_artifacts().context(Id::new(1)).execute().await?;
+    let artifacts = store
+        .get_artifacts()
+        .context(ContextId::new(1))
+        .execute()
+        .await?;
     assert_eq!(artifacts, vec![artifact1()]);
 
     Ok(())
@@ -257,16 +261,20 @@ async fn get_executions_works() -> anyhow::Result<()> {
     assert_eq!(executions, vec![]);
 
     // By ID.
-    let unregistered_id = Id::new(100);
+    let unregistered_id = ExecutionId::new(100);
     let executions = store
         .get_executions()
-        .ids(&[Id::new(1), unregistered_id])
+        .ids(&[ExecutionId::new(1), unregistered_id])
         .execute()
         .await?;
     assert_eq!(executions, vec![execution0()]);
 
     // By Context.
-    let executions = store.get_executions().context(Id::new(1)).execute().await?;
+    let executions = store
+        .get_executions()
+        .context(ContextId::new(1))
+        .execute()
+        .await?;
     assert_eq!(executions, vec![execution0()]);
 
     Ok(())
@@ -463,20 +471,28 @@ async fn get_contexts_works() -> anyhow::Result<()> {
     assert_eq!(contexts, vec![context0()]);
 
     // By ID.
-    let unregistered_id = Id::new(100);
+    let unregistered_id = ContextId::new(100);
     let contexts = store
         .get_contexts()
-        .ids(&[Id::new(1), unregistered_id])
+        .ids(&[ContextId::new(1), unregistered_id])
         .execute()
         .await?;
     assert_eq!(contexts, vec![context0()]);
 
     // By artifact.
-    let contexts = store.get_contexts().artifact(Id::new(2)).execute().await?;
+    let contexts = store
+        .get_contexts()
+        .artifact(ArtifactId::new(2))
+        .execute()
+        .await?;
     assert_eq!(contexts, vec![context0()]);
 
     // By execution.
-    let contexts = store.get_contexts().execution(Id::new(1)).execute().await?;
+    let contexts = store
+        .get_contexts()
+        .execution(ExecutionId::new(1))
+        .execute()
+        .await?;
     assert_eq!(contexts, vec![context0()]);
 
     Ok(())
@@ -736,22 +752,38 @@ async fn get_events_works() -> anyhow::Result<()> {
     let events = store.get_events().execute().await?;
     assert_eq!(events, vec![event0(), event1()]);
 
-    let events = store.get_events().artifact(Id::new(1)).execute().await?;
+    let events = store
+        .get_events()
+        .artifact(ArtifactId::new(1))
+        .execute()
+        .await?;
     assert_eq!(events, vec![event0()]);
 
-    let events = store.get_events().artifact(Id::new(2)).execute().await?;
+    let events = store
+        .get_events()
+        .artifact(ArtifactId::new(2))
+        .execute()
+        .await?;
     assert_eq!(events, vec![event1()]);
 
-    let events = store.get_events().execution(Id::new(1)).execute().await?;
+    let events = store
+        .get_events()
+        .execution(ExecutionId::new(1))
+        .execute()
+        .await?;
     assert_eq!(events, vec![event0(), event1()]);
 
-    let events = store.get_events().execution(Id::new(2)).execute().await?;
+    let events = store
+        .get_events()
+        .execution(ExecutionId::new(2))
+        .execute()
+        .await?;
     assert_eq!(events, vec![]);
 
     let events = store
         .get_events()
-        .artifact(Id::new(1))
-        .execution(Id::new(1))
+        .artifact(ArtifactId::new(1))
+        .execution(ExecutionId::new(1))
         .execute()
         .await?;
     assert_eq!(events, vec![event0(), event1()]);
@@ -781,8 +813,8 @@ fn existing_db() -> NamedTempFile {
 
 fn artifact0() -> Artifact {
     Artifact {
-        id: Id::new(1),
-        type_id: Id::new(1),
+        id: ArtifactId::new(1),
+        type_id: TypeId::new(1),
         name: None,
         uri: Some("path/to/data".to_owned()),
         properties: vec![
@@ -803,8 +835,8 @@ fn artifact0() -> Artifact {
 
 fn artifact1() -> Artifact {
     Artifact {
-        id: Id::new(2),
-        type_id: Id::new(2),
+        id: ArtifactId::new(2),
+        type_id: TypeId::new(2),
         name: None,
         uri: Some("path/to/model/file".to_owned()),
         properties: vec![
@@ -825,8 +857,8 @@ fn artifact1() -> Artifact {
 
 fn execution0() -> Execution {
     Execution {
-        id: Id::new(1),
-        type_id: Id::new(3),
+        id: ExecutionId::new(1),
+        type_id: TypeId::new(3),
         name: None,
         last_known_state: ExecutionState::Complete,
         properties: BTreeMap::new(),
@@ -838,8 +870,8 @@ fn execution0() -> Execution {
 
 fn context0() -> Context {
     Context {
-        id: Id::new(1),
-        type_id: Id::new(4),
+        id: ContextId::new(1),
+        type_id: TypeId::new(4),
         name: "exp.27823".to_owned(),
         properties: vec![(
             "note".to_owned(),
@@ -855,8 +887,8 @@ fn context0() -> Context {
 
 fn event0() -> Event {
     Event {
-        artifact_id: Id::new(1),
-        execution_id: Id::new(1),
+        artifact_id: ArtifactId::new(1),
+        execution_id: ExecutionId::new(1),
         path: Vec::new(),
         ty: EventType::DeclaredInput,
         create_time_since_epoch: Duration::from_millis(1609134223004),
@@ -865,8 +897,8 @@ fn event0() -> Event {
 
 fn event1() -> Event {
     Event {
-        artifact_id: Id::new(2),
-        execution_id: Id::new(1),
+        artifact_id: ArtifactId::new(2),
+        execution_id: ExecutionId::new(1),
         path: Vec::new(),
         ty: EventType::DeclaredOutput,
         create_time_since_epoch: Duration::from_millis(1609134223788),

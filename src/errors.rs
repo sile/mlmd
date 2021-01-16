@@ -1,6 +1,4 @@
-use crate::metadata::{Id, PropertyType, TypeId};
-
-pub use crate::query::TypeKind; // TODO: move
+use crate::metadata::{Id, PropertyType, TypeId, TypeKind};
 
 #[derive(Debug, thiserror::Error)]
 pub enum InitError {
@@ -28,12 +26,8 @@ pub enum PutError {
     #[error("database error")]
     Db(#[from] sqlx::Error),
 
-    #[error("{type_kind} {item_id} has a type {type_id} that doesn't exist")]
-    TypeNotFound {
-        type_kind: TypeKind,
-        type_id: TypeId,
-        item_id: Id,
-    },
+    #[error("{item_id} has a type {type_id} that doesn't exist")]
+    TypeNotFound { type_id: TypeId, item_id: Id },
 
     #[error("{type_kind} type with the name {type_name} already exists")]
     TypeAlreadyExists {
@@ -41,23 +35,18 @@ pub enum PutError {
         type_name: String,
     },
 
-    #[error("{type_kind} {item_id} has an undefined property {property_name:?}({property_type})")]
+    #[error("{item_id} has an undefined property {property_name:?}({property_type})")]
     UndefinedProperty {
-        type_kind: TypeKind,
         item_id: Id,
         property_name: String,
         property_type: PropertyType,
     },
 
-    #[error("{type_kind} {item_id} has a name {item_name:?} that already exists")]
-    NameAlreadyExists {
-        type_kind: TypeKind,
-        item_id: Id,
-        item_name: String,
-    },
+    #[error("{item_id} has a name {item_name:?} that already exists")]
+    NameAlreadyExists { item_id: Id, item_name: String },
 
-    #[error("{type_kind} {item_id} is not found")]
-    NotFound { type_kind: TypeKind, item_id: Id },
+    #[error("{item_id} is not found")]
+    NotFound { item_id: Id },
 }
 
 impl From<GetError> for PutError {

@@ -1,5 +1,6 @@
 use crate::metadata::{
-    ArtifactState, EventStep, EventType, ExecutionState, Id, PropertyType, PropertyValue, TypeId,
+    ArtifactId, ArtifactState, ContextId, EventStep, EventType, ExecutionId, ExecutionState,
+    PropertyType, PropertyValue, TypeId,
 };
 use crate::query::QueryValue;
 use std::collections::BTreeMap;
@@ -65,9 +66,9 @@ pub struct ArtifactOptions {
 pub struct GetArtifactsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) artifact_name: Option<String>,
-    pub(crate) artifact_ids: Vec<Id>,
+    pub(crate) artifact_ids: Vec<ArtifactId>,
     pub(crate) uri: Option<String>,
-    pub(crate) context_id: Option<Id>,
+    pub(crate) context_id: Option<ContextId>,
 }
 
 impl GetArtifactsOptions {
@@ -96,8 +97,8 @@ impl GetArtifactsOptions {
 pub struct GetExecutionsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) execution_name: Option<String>,
-    pub(crate) execution_ids: Vec<Id>,
-    pub(crate) context_id: Option<Id>,
+    pub(crate) execution_ids: Vec<ExecutionId>,
+    pub(crate) context_id: Option<ContextId>,
 }
 
 impl GetExecutionsOptions {
@@ -154,9 +155,9 @@ pub struct ExecutionOptions {
 pub struct GetContextsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) context_name: Option<String>,
-    pub(crate) context_ids: Vec<Id>,
-    pub(crate) artifact_id: Option<Id>,
-    pub(crate) execution_id: Option<Id>,
+    pub(crate) context_ids: Vec<ContextId>,
+    pub(crate) artifact_id: Option<ArtifactId>,
+    pub(crate) execution_id: Option<ExecutionId>,
 }
 
 impl GetContextsOptions {
@@ -226,6 +227,6 @@ impl Default for PutEventOptions {
 
 #[derive(Debug, Default, Clone)]
 pub struct GetEventsOptions {
-    pub(crate) artifact_ids: Vec<Id>,
-    pub(crate) execution_ids: Vec<Id>,
+    pub(crate) artifact_ids: Vec<ArtifactId>,
+    pub(crate) execution_ids: Vec<ExecutionId>,
 }

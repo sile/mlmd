@@ -2,6 +2,23 @@ use sqlx::Row as _;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TypeKind {
+    Execution = 0,
+    Artifact = 1,
+    Context = 2,
+}
+
+impl std::fmt::Display for TypeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Execution => write!(f, "execution"),
+            Self::Artifact => write!(f, "artifact"),
+            Self::Context => write!(f, "context"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TypeId(i32);
 
@@ -22,9 +39,9 @@ impl std::fmt::Display for TypeId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Id(i32);
+pub struct ArtifactId(i32);
 
-impl Id {
+impl ArtifactId {
     pub const fn new(id: i32) -> Self {
         Self(id)
     }
@@ -34,9 +51,78 @@ impl Id {
     }
 }
 
-impl std::fmt::Display for Id {
+impl std::fmt::Display for ArtifactId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ExecutionId(i32);
+
+impl ExecutionId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for ExecutionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ContextId(i32);
+
+impl ContextId {
+    pub const fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for ContextId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Id {
+    Artifact(ArtifactId),
+    Execution(ExecutionId),
+    Context(ContextId),
+}
+
+impl Id {
+    pub fn get(self) -> i32 {
+        match self {
+            Self::Artifact(x) => x.get(),
+            Self::Execution(x) => x.get(),
+            Self::Context(x) => x.get(),
+        }
+    }
+
+    pub fn kind(self) -> TypeKind {
+        match self {
+            Self::Artifact(_) => TypeKind::Artifact,
+            Self::Execution(_) => TypeKind::Execution,
+            Self::Context(_) => TypeKind::Context,
+        }
+    }
+}
+
+impl std::fmt::Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{} {}", self.kind(), self.get())
     }
 }
 
@@ -163,8 +249,8 @@ impl<'a> From<&'a str> for PropertyValue {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Artifact {
-    pub id: Id,
-    pub type_id: Id,
+    pub id: ArtifactId,
+    pub type_id: TypeId,
     pub name: Option<String>,
     pub uri: Option<String>,
     pub properties: BTreeMap<String, PropertyValue>,
@@ -187,8 +273,8 @@ impl crate::query::InsertProperty for Artifact {
 impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Artifact {
     fn from_row(row: &'a sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
-            id: Id::new(row.try_get("id")?),
-            type_id: Id::new(row.try_get("type_id")?),
+            id: ArtifactId::new(row.try_get("id")?),
+            type_id: TypeId::new(row.try_get("type_id")?),
             name: row.try_get("name")?,
             uri: row.try_get("uri")?,
             properties: BTreeMap::new(),
@@ -230,8 +316,8 @@ impl ArtifactState {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Execution {
-    pub id: Id,
-    pub type_id: Id,
+    pub id: ExecutionId,
+    pub type_id: TypeId,
     pub name: Option<String>,
     pub last_known_state: ExecutionState,
     pub properties: BTreeMap<String, PropertyValue>,
@@ -253,8 +339,8 @@ impl crate::query::InsertProperty for Execution {
 impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Execution {
     fn from_row(row: &'a sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
-            id: Id::new(row.try_get("id")?),
-            type_id: Id::new(row.try_get("type_id")?),
+            id: ExecutionId::new(row.try_get("id")?),
+            type_id: TypeId::new(row.try_get("type_id")?),
             name: row.try_get("name")?,
             properties: BTreeMap::new(),
             custom_properties: BTreeMap::new(),
@@ -299,8 +385,8 @@ impl ExecutionState {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Context {
-    pub id: Id,
-    pub type_id: Id,
+    pub id: ContextId,
+    pub type_id: TypeId,
     pub name: String,
     pub properties: BTreeMap<String, PropertyValue>,
     pub custom_properties: BTreeMap<String, PropertyValue>,
@@ -321,8 +407,8 @@ impl crate::query::InsertProperty for Context {
 impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Context {
     fn from_row(row: &'a sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
         Ok(Self {
-            id: Id::new(row.try_get("id")?),
-            type_id: Id::new(row.try_get("type_id")?),
+            id: ContextId::new(row.try_get("id")?),
+            type_id: TypeId::new(row.try_get("type_id")?),
             name: row.try_get("name")?,
             properties: BTreeMap::new(),
             custom_properties: BTreeMap::new(),
@@ -372,8 +458,8 @@ pub enum EventStep {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Event {
-    pub artifact_id: Id,
-    pub execution_id: Id,
+    pub artifact_id: ArtifactId,
+    pub execution_id: ExecutionId,
     pub path: Vec<EventStep>,
     pub ty: EventType,
     pub create_time_since_epoch: Duration,
