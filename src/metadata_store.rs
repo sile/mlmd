@@ -1,15 +1,15 @@
 use self::options::{
-    GetEventsOptions, GetTypesOptions, ItemOptions, PutEventOptions, PutTypeOptions,
+    GetEventsOptions, GetItemsOptions, GetTypesOptions, ItemOptions, PutEventOptions,
+    PutTypeOptions,
 };
 use crate::errors::{GetError, InitError, PostError, PutError};
 use crate::metadata::{
     ArtifactId, ContextId, Event, EventStep, EventType, ExecutionId, Id, PropertyType,
     PropertyTypes, TypeId, TypeKind,
 };
-use crate::query::{self, GetItemsQueryGenerator, InsertProperty as _, Query};
+use crate::query::{self, InsertProperty, Query};
 use crate::requests;
 use futures::TryStreamExt as _;
-use sqlx::FromRow as _;
 use sqlx::{AnyConnection, Connection as _, Row as _};
 use std::collections::BTreeMap;
 use std::time::{Duration, UNIX_EPOCH};
@@ -238,34 +238,28 @@ impl MetadataStore {
 
     pub(crate) async fn execute_get_items<T>(
         &mut self,
-        generator: T,
-    ) -> Result<Vec<T::Item>, GetError>
+        options: GetItemsOptions,
+    ) -> Result<Vec<T>, GetError>
     where
-        T: GetItemsQueryGenerator,
+        T: for<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> + InsertProperty,
     {
-        let sql = generator.generate_select_items_sql();
-        let mut rows = generator
-            .query_values()
-            .into_iter()
-            .fold(sqlx::query(&sql), |q, v| v.bind(q))
-            .fetch(&mut self.connection);
+        let (sql, args) = self.query.get_items(&options);
+        let mut rows = sqlx::query_with(&sql, args).fetch(&mut self.connection);
         let mut items = BTreeMap::new();
         while let Some(row) = rows.try_next().await? {
             let id: i32 = row.try_get("id")?;
-            items.insert(id, T::Item::from_row(&row)?);
+            items.insert(id, T::from_row(&row)?);
         }
         std::mem::drop(rows);
-
         if items.is_empty() {
             return Ok(Vec::new());
         }
 
-        let sql = generator.generate_select_properties_sql(items.len());
-        let mut query = sqlx::query_as::<_, query::Property>(&sql);
-        for id in items.keys() {
-            query = query.bind(*id);
-        }
-        let mut rows = query.fetch(&mut self.connection);
+        let (sql, args) = self
+            .query
+            .get_item_properties(options.type_kind(), items.keys().copied());
+        let mut rows =
+            sqlx::query_as_with::<_, query::Property, _>(&sql, args).fetch(&mut self.connection);
         while let Some(row) = rows.try_next().await? {
             let item = items.get_mut(&row.id).expect("bug");
             let is_custom_property = row.is_custom_property;

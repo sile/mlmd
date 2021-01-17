@@ -89,6 +89,23 @@ impl ItemOptions {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum GetItemsOptions {
+    Artifact(GetArtifactsOptions),
+    Execution(GetExecutionsOptions),
+    Context(GetContextsOptions),
+}
+
+impl GetItemsOptions {
+    pub fn type_kind(&self) -> TypeKind {
+        match self {
+            Self::Artifact(_) => TypeKind::Artifact,
+            Self::Execution(_) => TypeKind::Execution,
+            Self::Context(_) => TypeKind::Context,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ArtifactOptions {
     pub(crate) name: Option<String>,
@@ -107,53 +124,12 @@ pub struct GetArtifactsOptions {
     pub(crate) context_id: Option<ContextId>,
 }
 
-impl GetArtifactsOptions {
-    pub(crate) fn values(&self) -> Vec<QueryValue> {
-        let mut values = Vec::new();
-        if let Some(v) = &self.type_name {
-            values.push(QueryValue::Str(v));
-        }
-        if let Some(v) = &self.artifact_name {
-            values.push(QueryValue::Str(v));
-        }
-        for v in &self.artifact_ids {
-            values.push(QueryValue::Int(v.get()));
-        }
-        if let Some(v) = &self.uri {
-            values.push(QueryValue::Str(v));
-        }
-        if let Some(v) = self.context_id {
-            values.push(QueryValue::Int(v.get()));
-        }
-        values
-    }
-}
-
 #[derive(Debug, Default, Clone)]
 pub struct GetExecutionsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) execution_name: Option<String>,
     pub(crate) execution_ids: BTreeSet<ExecutionId>,
     pub(crate) context_id: Option<ContextId>,
-}
-
-impl GetExecutionsOptions {
-    pub(crate) fn values(&self) -> Vec<QueryValue> {
-        let mut values = Vec::new();
-        if let Some(v) = &self.type_name {
-            values.push(QueryValue::Str(v));
-        }
-        if let Some(v) = &self.execution_name {
-            values.push(QueryValue::Str(v));
-        }
-        for v in &self.execution_ids {
-            values.push(QueryValue::Int(v.get()));
-        }
-        if let Some(v) = self.context_id {
-            values.push(QueryValue::Int(v.get()));
-        }
-        values
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -171,28 +147,6 @@ pub struct GetContextsOptions {
     pub(crate) context_ids: BTreeSet<ContextId>,
     pub(crate) artifact_id: Option<ArtifactId>,
     pub(crate) execution_id: Option<ExecutionId>,
-}
-
-impl GetContextsOptions {
-    pub(crate) fn values(&self) -> Vec<QueryValue> {
-        let mut values = Vec::new();
-        if let Some(v) = &self.type_name {
-            values.push(QueryValue::Str(v));
-        }
-        if let Some(v) = &self.context_name {
-            values.push(QueryValue::Str(v));
-        }
-        for v in &self.context_ids {
-            values.push(QueryValue::Int(v.get()));
-        }
-        if let Some(v) = self.artifact_id {
-            values.push(QueryValue::Int(v.get()));
-        }
-        if let Some(v) = self.execution_id {
-            values.push(QueryValue::Int(v.get()));
-        }
-        values
-    }
 }
 
 #[derive(Debug, Clone, Default)]

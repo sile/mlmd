@@ -1,11 +1,10 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{self, EventStep, Id, PropertyValue, TypeId, TypeKind};
+use crate::metadata::{EventStep, Id, PropertyValue, TypeId, TypeKind};
 use crate::metadata_store::options::{
     GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
-    GetTypesOptions, ItemOptions,
+    GetItemsOptions, GetTypesOptions, ItemOptions,
 };
 use sqlx::any::AnyArguments;
-use sqlx::database::HasArguments;
 use sqlx::Arguments as _;
 use std::time::UNIX_EPOCH;
 
@@ -205,179 +204,203 @@ impl Query {
         }
     }
 
-    pub fn get_artifact_properties(&self, n_ids: usize) -> String {
-        format!(
+    pub fn get_item_properties(
+        &self,
+        type_kind: TypeKind,
+        ids: impl Iterator<Item = i32>,
+    ) -> (String, AnyArguments) {
+        let mut n = 0;
+        let mut args = AnyArguments::default();
+        for id in ids {
+            args.add(id);
+            n += 1;
+        }
+        assert_ne!(n, 0);
+
+        let sql = format!(
             concat!(
-                "SELECT artifact_id as id, name, is_custom_property, int_value, double_value, string_value ",
-                "FROM ArtifactProperty ",
-                "WHERE artifact_id IN ({})"
+                "SELECT {0}_id as id, name, is_custom_property, int_value, double_value, string_value ",
+                "FROM {1}Property ",
+                "WHERE {0}_id IN ({2})"
             ),
-            (0..n_ids)
+            type_kind,
+            type_kind.item_table_name(),
+            (0..n)
                 .map(|_| "?")
                 .collect::<Vec<_>>()
                 .join(",")
-        )
+        );
+        (sql, args)
     }
 
-    pub fn get_artifacts(&self, options: &GetArtifactsOptions) -> String {
-        let mut query = concat!(
+    pub fn get_items(&self, options: &GetItemsOptions) -> (String, AnyArguments) {
+        match options {
+            GetItemsOptions::Artifact(x) => self.get_artifacts(x),
+            GetItemsOptions::Execution(x) => self.get_executions(x),
+            GetItemsOptions::Context(x) => self.get_contexts(x),
+        }
+    }
+
+    pub fn get_artifacts(&self, options: &GetArtifactsOptions) -> (String, AnyArguments) {
+        let mut sql = concat!(
             "SELECT ",
             "A.id, A.type_id, A.name, A.uri, A.state, A.create_time_since_epoch, A.last_update_time_since_epoch ",
             "FROM Artifact as A ",
         ).to_owned();
+        let mut args = AnyArguments::default();
 
         if options.type_name.is_some() {
-            query += "JOIN Type as T ON A.type_id = T.id ";
+            sql += "JOIN Type as T ON A.type_id = T.id ";
         };
         if options.context_id.is_some() {
-            query += "JOIN Attribution as C ON A.id = C.artifact_id ";
+            sql += "JOIN Attribution as C ON A.id = C.artifact_id ";
         }
 
         let mut conditions = Vec::new();
-        if options.type_name.is_some() {
+        if let Some(v) = options.type_name.clone() {
             conditions.push("T.name = ?".to_owned());
+            args.add(v)
         }
-        if options.artifact_name.is_some() {
+        if let Some(v) = options.artifact_name.clone() {
             conditions.push("A.name = ?".to_owned());
+            args.add(v);
         }
         if !options.artifact_ids.is_empty() {
             conditions.push(format!(
                 "A.id IN ({})",
-                (0..options.artifact_ids.len())
+                options
+                    .artifact_ids
+                    .iter()
                     .map(|_| "?")
                     .collect::<Vec<_>>()
                     .join(",")
             ));
+            for id in &options.artifact_ids {
+                args.add(id.get());
+            }
         }
-        if options.uri.is_some() {
+        if let Some(v) = options.uri.clone() {
             conditions.push("A.uri = ?".to_owned());
+            args.add(v);
         }
-        if options.context_id.is_some() {
+        if let Some(v) = options.context_id {
             conditions.push("C.context_id = ?".to_owned());
+            args.add(v.get());
         }
 
         if !conditions.is_empty() {
-            query += &format!("WHERE {}", conditions.join(" AND "));
+            sql += &format!("WHERE {}", conditions.join(" AND "));
         }
 
-        query
+        (sql, args)
     }
 
-    pub fn get_executions(&self, options: &GetExecutionsOptions) -> String {
-        let mut query = concat!(
+    pub fn get_executions(&self, options: &GetExecutionsOptions) -> (String, AnyArguments) {
+        let mut sql = concat!(
             "SELECT ",
             "A.id, A.name, A.type_id, A.last_known_state, A.create_time_since_epoch, A.last_update_time_since_epoch ",
             "FROM Execution as A ",
         ).to_owned();
+        let mut args = AnyArguments::default();
 
         if options.type_name.is_some() {
-            query += "JOIN Type as T ON A.type_id = T.id ";
+            sql += "JOIN Type as T ON A.type_id = T.id ";
         };
         if options.context_id.is_some() {
-            query += "JOIN Association as C ON A.id = C.execution_id ";
+            sql += "JOIN Association as C ON A.id = C.execution_id ";
         }
 
         let mut conditions = Vec::new();
-        if options.type_name.is_some() {
+        if let Some(v) = options.type_name.clone() {
             conditions.push("T.name = ?".to_owned());
+            args.add(v);
         }
-        if options.execution_name.is_some() {
+        if let Some(v) = options.execution_name.clone() {
             conditions.push("A.name = ?".to_owned());
+            args.add(v);
         }
         if !options.execution_ids.is_empty() {
             conditions.push(format!(
                 "A.id IN ({})",
-                (0..options.execution_ids.len())
+                options
+                    .execution_ids
+                    .iter()
                     .map(|_| "?")
                     .collect::<Vec<_>>()
                     .join(",")
             ));
+            for id in &options.execution_ids {
+                args.add(id.get());
+            }
         }
-        if options.context_id.is_some() {
+        if let Some(v) = options.context_id {
             conditions.push("C.context_id = ?".to_owned());
+            args.add(v.get());
         }
 
         if !conditions.is_empty() {
-            query += &format!("WHERE {}", conditions.join(" AND "));
+            sql += &format!("WHERE {}", conditions.join(" AND "));
         }
 
-        query
+        (sql, args)
     }
 
-    pub fn get_execution_properties(&self, n_ids: usize) -> String {
-        format!(
-            concat!(
-                "SELECT execution_id as id, name, is_custom_property, int_value, double_value, string_value ",
-                "FROM ExecutionProperty ",
-                "WHERE execution_id IN ({})"
-            ),
-            (0..n_ids)
-                .map(|_| "?")
-                .collect::<Vec<_>>()
-                .join(",")
-        )
-    }
-
-    pub fn get_contexts(&self, options: &GetContextsOptions) -> String {
-        let mut query = concat!(
+    pub fn get_contexts(&self, options: &GetContextsOptions) -> (String, AnyArguments) {
+        let mut sql = concat!(
             "SELECT ",
             "A.id, A.name, A.type_id, A.create_time_since_epoch, A.last_update_time_since_epoch ",
             "FROM Context as A ",
         )
         .to_owned();
+        let mut args = AnyArguments::default();
 
         if options.type_name.is_some() {
-            query += "JOIN Type as T ON A.type_id = T.id ";
+            sql += "JOIN Type as T ON A.type_id = T.id ";
         };
         if options.artifact_id.is_some() {
-            query += "JOIN Attribution as B ON A.id = B.context_id ";
+            sql += "JOIN Attribution as B ON A.id = B.context_id ";
         }
         if options.execution_id.is_some() {
-            query += "JOIN Association as C ON A.id = C.context_id ";
+            sql += "JOIN Association as C ON A.id = C.context_id ";
         }
 
         let mut conditions = Vec::new();
-        if options.type_name.is_some() {
+        if let Some(v) = options.type_name.clone() {
             conditions.push("T.name = ?".to_owned());
+            args.add(v);
         }
-        if options.context_name.is_some() {
+        if let Some(v) = options.context_name.clone() {
             conditions.push("A.name = ?".to_owned());
+            args.add(v);
         }
         if !options.context_ids.is_empty() {
             conditions.push(format!(
                 "A.id IN ({})",
-                (0..options.context_ids.len())
+                options
+                    .context_ids
+                    .iter()
                     .map(|_| "?")
                     .collect::<Vec<_>>()
                     .join(",")
             ));
+            for id in &options.context_ids {
+                args.add(id.get());
+            }
         }
-        if options.artifact_id.is_some() {
+        if let Some(v) = options.artifact_id {
             conditions.push("B.artifact_id = ?".to_owned());
+            args.add(v.get());
         }
-        if options.execution_id.is_some() {
+        if let Some(v) = options.execution_id {
             conditions.push("C.execution_id = ?".to_owned());
+            args.add(v.get());
         }
 
         if !conditions.is_empty() {
-            query += &format!("WHERE {}", conditions.join(" AND "));
+            sql += &format!("WHERE {}", conditions.join(" AND "));
         }
 
-        query
-    }
-
-    pub fn get_context_properties(&self, n_ids: usize) -> String {
-        format!(
-            concat!(
-                "SELECT context_id as id, name, is_custom_property, int_value, double_value, string_value ",
-                "FROM ContextProperty ",
-                "WHERE context_id IN ({})"
-            ),
-            (0..n_ids)
-                .map(|_| "?")
-                .collect::<Vec<_>>()
-                .join(",")
-        )
+        (sql, args)
     }
 
     pub fn get_last_item_id(&self, type_kind: TypeKind) -> String {
@@ -920,25 +943,6 @@ pub enum QueryValue<'a> {
     Str(&'a str),
 }
 
-impl<'a> QueryValue<'a> {
-    pub fn bind<'q, DB>(
-        self,
-        query: sqlx::query::Query<'q, DB, <DB as HasArguments<'q>>::Arguments>,
-    ) -> sqlx::query::Query<'q, DB, <DB as HasArguments<'q>>::Arguments>
-    where
-        'a: 'q,
-        DB: sqlx::Database,
-        i32: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
-        i64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
-        &'a str: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
-    {
-        match self {
-            Self::Int(v) => query.bind(v),
-            Self::Str(v) => query.bind(v),
-        }
-    }
-}
-
 #[derive(Debug, sqlx::FromRow)]
 pub struct Property {
     pub id: i32,
@@ -1006,74 +1010,7 @@ pub trait GetItemsQueryGenerator {
     type Item: for<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> + InsertProperty;
 
     fn generate_select_items_sql(&self) -> String;
-    fn generate_select_properties_sql(&self, items: usize) -> String;
     fn query_values(&self) -> Vec<QueryValue>;
-}
-
-#[derive(Debug)]
-pub struct GetArtifactsQueryGenerator {
-    pub query: Query,
-    pub options: GetArtifactsOptions,
-}
-
-impl GetItemsQueryGenerator for GetArtifactsQueryGenerator {
-    type Item = metadata::Artifact;
-
-    fn generate_select_items_sql(&self) -> String {
-        self.query.get_artifacts(&self.options)
-    }
-
-    fn generate_select_properties_sql(&self, items: usize) -> String {
-        self.query.get_artifact_properties(items)
-    }
-
-    fn query_values(&self) -> Vec<QueryValue> {
-        self.options.values()
-    }
-}
-
-#[derive(Debug)]
-pub struct GetExecutionsQueryGenerator {
-    pub query: Query,
-    pub options: GetExecutionsOptions,
-}
-
-impl GetItemsQueryGenerator for GetExecutionsQueryGenerator {
-    type Item = metadata::Execution;
-
-    fn generate_select_items_sql(&self) -> String {
-        self.query.get_executions(&self.options)
-    }
-
-    fn generate_select_properties_sql(&self, items: usize) -> String {
-        self.query.get_execution_properties(items)
-    }
-
-    fn query_values(&self) -> Vec<QueryValue> {
-        self.options.values()
-    }
-}
-
-#[derive(Debug)]
-pub struct GetContextsQueryGenerator {
-    pub query: Query,
-    pub options: GetContextsOptions,
-}
-
-impl GetItemsQueryGenerator for GetContextsQueryGenerator {
-    type Item = metadata::Context;
-
-    fn generate_select_items_sql(&self) -> String {
-        self.query.get_contexts(&self.options)
-    }
-
-    fn generate_select_properties_sql(&self, items: usize) -> String {
-        self.query.get_context_properties(items)
-    }
-
-    fn query_values(&self) -> Vec<QueryValue> {
-        self.options.values()
-    }
 }
 
 fn current_millis() -> i64 {

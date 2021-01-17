@@ -5,7 +5,6 @@ use crate::metadata::{
     PropertyTypes, PropertyValue, PropertyValues, TypeId, TypeKind,
 };
 use crate::metadata_store::{options, MetadataStore};
-use crate::query;
 
 #[derive(Debug)]
 pub struct PutArtifactTypeRequest<'a> {
@@ -314,11 +313,9 @@ impl<'a> GetArtifactsRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<Vec<Artifact>, errors::GetError> {
-        let generator = query::GetArtifactsQueryGenerator {
-            query: self.store.query.clone(),
-            options: self.options,
-        };
-        self.store.execute_get_items(generator).await
+        self.store
+            .execute_get_items(options::GetItemsOptions::Artifact(self.options))
+            .await
     }
 }
 
@@ -363,11 +360,9 @@ impl<'a> GetExecutionsRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<Vec<Execution>, errors::GetError> {
-        let generator = query::GetExecutionsQueryGenerator {
-            query: self.store.query.clone(),
-            options: self.options,
-        };
-        self.store.execute_get_items(generator).await
+        self.store
+            .execute_get_items(options::GetItemsOptions::Execution(self.options))
+            .await
     }
 }
 
@@ -417,11 +412,9 @@ impl<'a> GetContextsRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<Vec<Context>, errors::GetError> {
-        let generator = query::GetContextsQueryGenerator {
-            query: self.store.query.clone(),
-            options: self.options,
-        };
-        self.store.execute_get_items(generator).await
+        self.store
+            .execute_get_items(options::GetItemsOptions::Context(self.options))
+            .await
     }
 }
 
