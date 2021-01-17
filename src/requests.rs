@@ -87,6 +87,8 @@ impl<'a> GetArtifactTypesRequest<'a> {
     }
 
     /// Specifies the ID of the target type.
+    ///
+    /// If you need to specify multiple IDs, please use [`ids`](Self::ids) instead.
     pub fn id(self, type_id: TypeId) -> Self {
         self.ids(iter::once(type_id))
     }
@@ -194,6 +196,8 @@ impl<'a> GetExecutionTypesRequest<'a> {
     }
 
     /// Specifies the ID of the target type.
+    ///
+    /// If you need to specify multiple IDs, please use [`ids`](Self::ids) instead.
     pub fn id(self, type_id: TypeId) -> Self {
         self.ids(iter::once(type_id))
     }
@@ -301,6 +305,8 @@ impl<'a> GetContextTypesRequest<'a> {
     }
 
     /// Specifies the ID of the target type.
+    ///
+    /// If you need to specify multiple IDs, please use [`ids`](Self::ids) instead.
     pub fn id(self, type_id: TypeId) -> Self {
         self.ids(iter::once(type_id))
     }

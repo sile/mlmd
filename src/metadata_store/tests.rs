@@ -799,7 +799,7 @@ async fn get_events_works() -> anyhow::Result<()> {
         .execution(ExecutionId::new(1))
         .execute()
         .await?;
-    assert_eq!(events, vec![event0(), event1()]);
+    assert_eq!(events, vec![event0()]);
 
     Ok(())
 }

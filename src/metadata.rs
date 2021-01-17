@@ -600,10 +600,6 @@ pub struct Event {
     pub create_time_since_epoch: Duration,
 }
 
-fn none_if_empty(s: String) -> Option<String> {
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+fn none_if_empty(s: Option<String>) -> Option<String> {
+    s.and_then(|s| if s.is_empty() { None } else { Some(s) })
 }
