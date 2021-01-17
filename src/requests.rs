@@ -485,13 +485,8 @@ impl<'a> PostArtifactRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<ArtifactId, errors::PostError> {
-        let generator = query::PostArtifactQueryGenerator {
-            query: self.store.query.clone(),
-            type_id: self.type_id,
-            options: self.options,
-        };
         self.store
-            .execute_post_item(self.type_id, generator)
+            .execute_post_item(self.type_id, options::ItemOptions::Artifact(self.options))
             .await
             .map(ArtifactId::new)
     }
@@ -552,13 +547,8 @@ impl<'a> PostExecutionRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<ExecutionId, errors::PostError> {
-        let generator = query::PostExecutionQueryGenerator {
-            query: self.store.query.clone(),
-            type_id: self.type_id,
-            options: self.options,
-        };
         self.store
-            .execute_post_item(self.type_id, generator)
+            .execute_post_item(self.type_id, options::ItemOptions::Execution(self.options))
             .await
             .map(ExecutionId::new)
     }
@@ -568,17 +558,17 @@ impl<'a> PostExecutionRequest<'a> {
 pub struct PostContextRequest<'a> {
     store: &'a mut MetadataStore,
     type_id: TypeId,
-    name: String,
     options: options::ContextOptions,
 }
 
 impl<'a> PostContextRequest<'a> {
     pub(crate) fn new(store: &'a mut MetadataStore, type_id: TypeId, context_name: &str) -> Self {
+        let mut options = options::ContextOptions::default();
+        options.name = Some(context_name.to_owned());
         Self {
             store,
             type_id,
-            name: context_name.to_owned(),
-            options: Default::default(),
+            options,
         }
     }
 
@@ -611,14 +601,8 @@ impl<'a> PostContextRequest<'a> {
     }
 
     pub async fn execute(self) -> Result<ContextId, errors::PostError> {
-        let generator = query::PostContextQueryGenerator {
-            query: self.store.query.clone(),
-            type_id: self.type_id,
-            name: self.name,
-            options: self.options,
-        };
         self.store
-            .execute_post_item(self.type_id, generator)
+            .execute_post_item(self.type_id, options::ItemOptions::Context(self.options))
             .await
             .map(ContextId::new)
     }

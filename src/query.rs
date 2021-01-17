@@ -1,11 +1,8 @@
 // https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/util/metadata_source_query_config.cc
-use crate::metadata::{
-    self, ArtifactState, EventStep, ExecutionState, Id, PropertyValue, PropertyValues, TypeId,
-    TypeKind,
-};
+use crate::metadata::{self, EventStep, Id, PropertyValue, TypeId, TypeKind};
 use crate::metadata_store::options::{
-    self, ArtifactOptions, ExecutionOptions, GetArtifactsOptions, GetContextsOptions,
-    GetEventsOptions, GetExecutionsOptions, GetTypesOptions, ItemOptions,
+    GetArtifactsOptions, GetContextsOptions, GetEventsOptions, GetExecutionsOptions,
+    GetTypesOptions, ItemOptions,
 };
 use sqlx::any::AnyArguments;
 use sqlx::database::HasArguments;
@@ -118,31 +115,38 @@ impl Query {
         "SELECT count(*) FROM Execution WHERE id=?"
     }
 
-    pub fn check_artifact_name(&self, is_post: bool) -> &'static str {
-        if is_post {
-            "SELECT count(*) FROM Artifact WHERE type_id=? AND name=?"
-        } else {
-            "SELECT count(*) FROM Artifact WHERE type_id=? AND name=? AND id != ?"
-        }
-    }
+    pub fn insert_item(&self, type_id: TypeId, options: &ItemOptions) -> (String, AnyArguments) {
+        let current_millis = current_millis();
 
-    pub fn insert_artifact(&self, options: &ArtifactOptions) -> String {
-        // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
-        // we can use a static INSERT statement without regarding `options`.
-        let mut fields =
-            "type_id, state, create_time_since_epoch, last_update_time_since_epoch".to_owned();
-        let mut values = "?, ?, ?, ?".to_owned();
+        let mut fields = vec![
+            "type_id",
+            "create_time_since_epoch",
+            "last_update_time_since_epoch",
+        ];
+        let mut args = AnyArguments::default();
+        args.add(type_id.get());
+        args.add(current_millis);
+        args.add(current_millis);
 
-        if options.name.is_some() {
-            fields += ", name";
-            values += ", ?";
+        if let Some(name) = options.name() {
+            fields.push("name");
+            args.add(name.to_owned());
         }
-        if options.uri.is_some() {
-            fields += ", uri";
-            values += ", ?";
+        for (name, value) in options.extra_fields() {
+            fields.push(name);
+            match value {
+                QueryValue::Int(v) => args.add(v),
+                QueryValue::Str(v) => args.add(v.to_owned()),
+            }
         }
 
-        format!("INSERT INTO Artifact ({}) VALUES ({})", fields, values)
+        let sql = format!(
+            "INSERT INTO {} ({}) VALUES ({})",
+            options.type_kind().item_table_name(),
+            fields.join(","),
+            fields.iter().map(|_| "?").collect::<Vec<_>>().join(",")
+        );
+        (sql, args)
     }
 
     pub fn update_item(&self, item_id: Id, options: &ItemOptions) -> (String, AnyArguments) {
@@ -158,7 +162,6 @@ impl Query {
             fields += &format!(", {}=?", name);
             match value {
                 QueryValue::Int(v) => args.add(v),
-                QueryValue::I64(v) => args.add(v),
                 QueryValue::Str(v) => args.add(v.to_owned()),
             }
         }
@@ -200,10 +203,6 @@ impl Query {
             Self::Sqlite(x) => x.upsert_item_property_sql(item_id, value),
             Self::Mysql(x) => x.upsert_item_property_sql(item_id, value),
         }
-    }
-
-    pub fn get_last_artifact_id(&self) -> &'static str {
-        "SELECT id FROM Artifact ORDER BY id DESC LIMIT 1"
     }
 
     pub fn get_artifact_properties(&self, n_ids: usize) -> String {
@@ -319,34 +318,6 @@ impl Query {
         )
     }
 
-    pub fn insert_execution(&self, options: &ExecutionOptions) -> String {
-        // If https://github.com/launchbadge/sqlx/issues/772 is resolved,
-        // we can use a static INSERT statement without regarding `options`.
-        let mut fields =
-            "type_id, last_known_state, create_time_since_epoch, last_update_time_since_epoch"
-                .to_owned();
-        let mut values = "?, ?, ?, ?".to_owned();
-
-        if options.name.is_some() {
-            fields += ", name";
-            values += ", ?";
-        }
-
-        format!("INSERT INTO Execution ({}) VALUES ({})", fields, values)
-    }
-
-    pub fn get_last_execution_id(&self) -> &'static str {
-        "SELECT id FROM Execution ORDER BY id DESC LIMIT 1"
-    }
-
-    pub fn check_execution_name(&self, is_post: bool) -> &'static str {
-        if is_post {
-            "SELECT count(*) FROM Execution WHERE type_id=? AND name=?"
-        } else {
-            "SELECT count(*) FROM Execution WHERE type_id=? AND name=? AND id != ?"
-        }
-    }
-
     pub fn get_contexts(&self, options: &GetContextsOptions) -> String {
         let mut query = concat!(
             "SELECT ",
@@ -409,25 +380,24 @@ impl Query {
         )
     }
 
-    pub fn insert_context(&self) -> &'static str {
-        concat!(
-            "INSERT INTO Context ",
-            "(type_id, create_time_since_epoch, last_update_time_since_epoch, name) ",
-            "VALUES (?, ?, ?, ?)"
+    pub fn get_last_item_id(&self, type_kind: TypeKind) -> String {
+        format!(
+            "SELECT id FROM {} ORDER BY id DESC LIMIT 1",
+            type_kind.item_table_name()
         )
-    }
-
-    pub fn get_last_context_id(&self) -> &'static str {
-        "SELECT id FROM Context ORDER BY id DESC LIMIT 1"
     }
 
     pub fn check_item_name(
         &self,
+        type_kind: TypeKind,
         type_id: TypeId,
         item_id: Option<Id>,
         item_name: &str,
     ) -> (String, AnyArguments) {
-        let mut sql = format!("SELECT count(*) FROM Context WHERE type_id=? AND name=?");
+        let mut sql = format!(
+            "SELECT count(*) FROM {} WHERE type_id=? AND name=?",
+            type_kind.item_table_name()
+        );
         let mut args = AnyArguments::default();
         args.add(type_id.get());
         args.add(item_name.to_owned());
@@ -438,14 +408,6 @@ impl Query {
         }
 
         (sql, args)
-    }
-
-    pub fn check_context_name(&self, is_post: bool) -> &'static str {
-        if is_post {
-            "SELECT count(*) FROM Context WHERE type_id=? AND name=?"
-        } else {
-            "SELECT count(*) FROM Context WHERE type_id=? AND name=? AND id != ?"
-        }
     }
 
     pub fn insert_event(&self) -> &'static str {
@@ -955,7 +917,6 @@ pub struct TypeProperty {
 #[derive(Debug)]
 pub enum QueryValue<'a> {
     Int(i32),
-    I64(i64),
     Str(&'a str),
 }
 
@@ -973,25 +934,6 @@ impl<'a> QueryValue<'a> {
     {
         match self {
             Self::Int(v) => query.bind(v),
-            Self::I64(v) => query.bind(v),
-            Self::Str(v) => query.bind(v),
-        }
-    }
-
-    pub fn bind_scalar<'q, O, DB>(
-        self,
-        query: sqlx::query::QueryScalar<'q, DB, O, <DB as HasArguments<'q>>::Arguments>,
-    ) -> sqlx::query::QueryScalar<'q, DB, O, <DB as HasArguments<'q>>::Arguments>
-    where
-        'a: 'q,
-        DB: sqlx::Database,
-        i32: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
-        i64: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
-        &'a str: sqlx::Encode<'q, DB> + sqlx::Type<DB>,
-    {
-        match self {
-            Self::Int(v) => query.bind(v),
-            Self::I64(v) => query.bind(v),
             Self::Str(v) => query.bind(v),
         }
     }
@@ -1131,178 +1073,6 @@ impl GetItemsQueryGenerator for GetContextsQueryGenerator {
 
     fn query_values(&self) -> Vec<QueryValue> {
         self.options.values()
-    }
-}
-
-pub trait PostItemQueryGenerator {
-    const TYPE_KIND: TypeKind;
-
-    fn item_name(&self) -> Option<&str>;
-    fn item_properties(&self) -> &PropertyValues;
-    fn item_custom_properties(&self) -> &PropertyValues;
-    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)>;
-    fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>);
-    fn generate_last_item_id(&self) -> &'static str;
-}
-
-#[derive(Debug)]
-pub struct PostArtifactQueryGenerator {
-    pub query: Query,
-    pub type_id: TypeId,
-    pub options: options::ArtifactOptions,
-}
-
-impl PostItemQueryGenerator for PostArtifactQueryGenerator {
-    const TYPE_KIND: TypeKind = TypeKind::Artifact;
-
-    fn item_name(&self) -> Option<&str> {
-        self.options.name.as_ref().map(|n| n.as_str())
-    }
-
-    fn item_properties(&self) -> &PropertyValues {
-        &self.options.properties
-    }
-
-    fn item_custom_properties(&self) -> &PropertyValues {
-        &self.options.custom_properties
-    }
-
-    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
-        if let Some(name) = &self.options.name {
-            let values = vec![QueryValue::Int(self.type_id.get()), QueryValue::Str(name)];
-            Some((self.query.check_artifact_name(true), values))
-        } else {
-            None
-        }
-    }
-
-    fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
-        let current_millis = current_millis();
-        let state = self.options.state.unwrap_or(ArtifactState::Unknown);
-
-        let sql = self.query.insert_artifact(&self.options);
-        let mut values = vec![
-            QueryValue::Int(self.type_id.get()),
-            QueryValue::Int(state as i32),
-            QueryValue::I64(current_millis),
-            QueryValue::I64(current_millis),
-        ];
-        if let Some(v) = &self.options.name {
-            values.push(QueryValue::Str(v));
-        }
-        if let Some(v) = &self.options.uri {
-            values.push(QueryValue::Str(v));
-        }
-        (sql, values)
-    }
-
-    fn generate_last_item_id(&self) -> &'static str {
-        self.query.get_last_artifact_id()
-    }
-}
-
-#[derive(Debug)]
-pub struct PostExecutionQueryGenerator {
-    pub query: Query,
-    pub type_id: TypeId,
-    pub options: options::ExecutionOptions,
-}
-
-impl PostItemQueryGenerator for PostExecutionQueryGenerator {
-    const TYPE_KIND: TypeKind = TypeKind::Execution;
-
-    fn item_name(&self) -> Option<&str> {
-        self.options.name.as_ref().map(|n| n.as_str())
-    }
-
-    fn item_properties(&self) -> &PropertyValues {
-        &self.options.properties
-    }
-
-    fn item_custom_properties(&self) -> &PropertyValues {
-        &self.options.custom_properties
-    }
-
-    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
-        if let Some(name) = &self.options.name {
-            let values = vec![QueryValue::Int(self.type_id.get()), QueryValue::Str(name)];
-            Some((self.query.check_execution_name(true), values))
-        } else {
-            None
-        }
-    }
-
-    fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
-        let current_millis = current_millis();
-        let state = self
-            .options
-            .last_known_state
-            .unwrap_or(ExecutionState::Unknown);
-
-        let sql = self.query.insert_execution(&self.options);
-        let mut values = vec![
-            QueryValue::Int(self.type_id.get()),
-            QueryValue::Int(state as i32),
-            QueryValue::I64(current_millis),
-            QueryValue::I64(current_millis),
-        ];
-        if let Some(v) = &self.options.name {
-            values.push(QueryValue::Str(v));
-        }
-        (sql, values)
-    }
-
-    fn generate_last_item_id(&self) -> &'static str {
-        self.query.get_last_execution_id()
-    }
-}
-
-#[derive(Debug)]
-pub struct PostContextQueryGenerator {
-    pub query: Query,
-    pub type_id: TypeId,
-    pub name: String,
-    pub options: options::ContextOptions,
-}
-
-impl PostItemQueryGenerator for PostContextQueryGenerator {
-    const TYPE_KIND: TypeKind = TypeKind::Context;
-
-    fn item_name(&self) -> Option<&str> {
-        Some(self.name.as_str())
-    }
-
-    fn item_properties(&self) -> &PropertyValues {
-        &self.options.properties
-    }
-
-    fn item_custom_properties(&self) -> &PropertyValues {
-        &self.options.custom_properties
-    }
-
-    fn generate_check_item_name_query(&self) -> Option<(&'static str, Vec<QueryValue>)> {
-        let values = vec![
-            QueryValue::Int(self.type_id.get()),
-            QueryValue::Str(&self.name),
-        ];
-        Some((self.query.check_context_name(true), values))
-    }
-
-    fn generate_insert_item_query(&self) -> (String, Vec<QueryValue>) {
-        let current_millis = current_millis();
-
-        let sql = self.query.insert_context();
-        let values = vec![
-            QueryValue::Int(self.type_id.get()),
-            QueryValue::I64(current_millis),
-            QueryValue::I64(current_millis),
-            QueryValue::Str(&self.name),
-        ];
-        (sql.to_owned(), values)
-    }
-
-    fn generate_last_item_id(&self) -> &'static str {
-        self.query.get_last_context_id()
     }
 }
 

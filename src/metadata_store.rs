@@ -66,25 +66,20 @@ impl MetadataStore {
         requests::GetContextTypesRequest::new(self)
     }
 
-    pub(crate) async fn execute_post_item<T>(
+    pub(crate) async fn execute_post_item(
         &mut self,
         type_id: TypeId,
-        generator: T,
-    ) -> Result<i32, PostError>
-    where
-        T: query::PostItemQueryGenerator,
-    {
+        options: ItemOptions,
+    ) -> Result<i32, PostError> {
+        let type_kind = options.type_kind();
         let property_types = self
-            .get_type_properties(T::TYPE_KIND, type_id)
+            .get_type_properties(type_kind, type_id)
             .await?
-            .ok_or_else(|| PostError::TypeNotFound {
-                type_kind: T::TYPE_KIND,
-                type_id,
-            })?;
-        for (name, value) in generator.item_properties() {
+            .ok_or_else(|| PostError::TypeNotFound { type_kind, type_id })?;
+        for (name, value) in options.properties() {
             if property_types.get(name).copied() != Some(value.ty()) {
                 return Err(PostError::UndefinedProperty {
-                    type_kind: T::TYPE_KIND,
+                    type_kind,
                     type_id,
                     property_name: name.clone(),
                 });
@@ -93,44 +88,42 @@ impl MetadataStore {
 
         let mut connection = self.connection.begin().await?;
 
-        if let Some((sql, values)) = generator.generate_check_item_name_query() {
-            let count: i32 = values
-                .into_iter()
-                .fold(sqlx::query_scalar(&sql), |q, v| v.bind_scalar(q))
+        if let Some(item_name) = options.name() {
+            let (sql, args) = self
+                .query
+                .check_item_name(type_kind, type_id, None, item_name);
+            let count: i32 = sqlx::query_scalar_with(&sql, args)
                 .fetch_one(&mut connection)
                 .await?;
             if count > 0 {
                 return Err(PostError::NameAlreadyExists {
-                    type_kind: T::TYPE_KIND,
-                    item_name: generator.item_name().expect("bug").to_owned(),
+                    type_kind,
+                    item_name: item_name.to_owned(),
                 });
             }
         }
 
-        let (sql, values) = generator.generate_insert_item_query();
-        values
-            .into_iter()
-            .fold(sqlx::query(&sql), |q, v| v.bind(q))
+        let (sql, args) = self.query.insert_item(type_id, &options);
+        sqlx::query_with(&sql, args)
             .execute(&mut connection)
             .await?;
 
-        let item_id: i32 = sqlx::query_scalar(generator.generate_last_item_id())
-            .fetch_one(&mut connection)
-            .await?;
+        let sql = self.query.get_last_item_id(type_kind);
+        let item_id: i32 = sqlx::query_scalar(&sql).fetch_one(&mut connection).await?;
 
-        let properties = generator
-            .item_properties()
+        let properties = options
+            .properties()
             .iter()
             .map(|(k, v)| (k, v, false))
             .chain(
-                generator
-                    .item_custom_properties()
+                options
+                    .custom_properties()
                     .iter()
                     .map(|(k, v)| (k, v, true)),
             );
         for (name, value, is_custom) in properties {
             let (sql, args) = self.query.upsert_item_property(
-                Id::from_kind(item_id, T::TYPE_KIND),
+                Id::from_kind(item_id, type_kind),
                 name,
                 value,
                 is_custom,
@@ -197,9 +190,9 @@ impl MetadataStore {
         let mut connection = self.connection.begin().await?;
 
         if let Some(item_name) = options.name() {
-            let (sql, args) = self
-                .query
-                .check_item_name(type_id, Some(item_id), item_name);
+            let (sql, args) =
+                self.query
+                    .check_item_name(item_id.kind(), type_id, Some(item_id), item_name);
             let count: i32 = sqlx::query_scalar_with(&sql, args)
                 .fetch_one(&mut connection)
                 .await?;

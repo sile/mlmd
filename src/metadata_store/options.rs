@@ -1,6 +1,6 @@
 use crate::metadata::{
     ArtifactId, ArtifactState, ContextId, EventStep, EventType, ExecutionId, ExecutionState,
-    PropertyTypes, PropertyValues, TypeId,
+    PropertyTypes, PropertyValues, TypeId, TypeKind,
 };
 use crate::query::QueryValue;
 use std::collections::BTreeSet;
@@ -56,6 +56,14 @@ impl ItemOptions {
             Self::Artifact(x) => &x.custom_properties,
             Self::Execution(x) => &x.custom_properties,
             Self::Context(x) => &x.custom_properties,
+        }
+    }
+
+    pub fn type_kind(&self) -> TypeKind {
+        match self {
+            Self::Artifact(_) => TypeKind::Artifact,
+            Self::Execution(_) => TypeKind::Execution,
+            Self::Context(_) => TypeKind::Context,
         }
     }
 
