@@ -58,9 +58,11 @@ impl Query {
         "SELECT schema_version FROM MLMDEnv"
     }
 
-    // TODO: or ignore
     pub fn insert_schema_version(&self) -> &'static str {
-        "INSERT INTO MLMDEnv VALUES (?)"
+        match self {
+            Self::Sqlite(_) => "INSERT OR IGNORE INTO MLMDEnv VALUES (?)",
+            Self::Mysql(_) => "INSERT IGNORE INTO MLMDEnv VALUES (?)",
+        }
     }
 
     pub fn get_types(&self, options: &GetTypesOptions) -> String {
@@ -69,15 +71,7 @@ impl Query {
             query += "AND name = ? ";
         }
         if !options.ids.is_empty() {
-            query += &format!(
-                "AND id IN ({})",
-                options
-                    .ids
-                    .iter()
-                    .map(|_| "?")
-                    .collect::<Vec<_>>()
-                    .join(",")
-            );
+            query += &format!("AND id IN ({})", params(options.ids.len()));
         }
         query
     }
@@ -143,7 +137,7 @@ impl Query {
             "INSERT INTO {} ({}) VALUES ({})",
             options.type_kind().item_table_name(),
             fields.join(","),
-            fields.iter().map(|_| "?").collect::<Vec<_>>().join(",")
+            params(fields.len())
         );
         (sql, args)
     }
@@ -225,10 +219,7 @@ impl Query {
             ),
             type_kind,
             type_kind.item_table_name(),
-            (0..n)
-                .map(|_| "?")
-                .collect::<Vec<_>>()
-                .join(",")
+            params(n)
         );
         (sql, args)
     }
@@ -266,15 +257,7 @@ impl Query {
             args.add(v);
         }
         if !options.artifact_ids.is_empty() {
-            conditions.push(format!(
-                "A.id IN ({})",
-                options
-                    .artifact_ids
-                    .iter()
-                    .map(|_| "?")
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ));
+            conditions.push(format!("A.id IN ({})", params(options.artifact_ids.len())));
             for id in &options.artifact_ids {
                 args.add(id.get());
             }
@@ -320,15 +303,7 @@ impl Query {
             args.add(v);
         }
         if !options.execution_ids.is_empty() {
-            conditions.push(format!(
-                "A.id IN ({})",
-                options
-                    .execution_ids
-                    .iter()
-                    .map(|_| "?")
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ));
+            conditions.push(format!("A.id IN ({})", params(options.execution_ids.len())));
             for id in &options.execution_ids {
                 args.add(id.get());
             }
@@ -374,15 +349,7 @@ impl Query {
             args.add(v);
         }
         if !options.context_ids.is_empty() {
-            conditions.push(format!(
-                "A.id IN ({})",
-                options
-                    .context_ids
-                    .iter()
-                    .map(|_| "?")
-                    .collect::<Vec<_>>()
-                    .join(",")
-            ));
+            conditions.push(format!("A.id IN ({})", params(options.context_ids.len())));
             for id in &options.context_ids {
                 args.add(id.get());
             }
@@ -467,23 +434,13 @@ impl Query {
         if !options.artifact_ids.is_empty() {
             conditions.push(format!(
                 "Artifact.id IN ({}) ",
-                options
-                    .artifact_ids
-                    .iter()
-                    .map(|_| "?")
-                    .collect::<Vec<_>>()
-                    .join(",")
+                params(options.artifact_ids.len())
             ));
         }
         if !options.execution_ids.is_empty() {
             conditions.push(format!(
                 "Execution.id IN ({}) ",
-                options
-                    .execution_ids
-                    .iter()
-                    .map(|_| "?")
-                    .collect::<Vec<_>>()
-                    .join(",")
+                params(options.execution_ids.len())
             ));
         }
         if !conditions.is_empty() {
@@ -494,7 +451,7 @@ impl Query {
 
     pub fn get_event_paths(&self, n_events: usize) -> String {
         format!("SELECT event_id, is_index_step, step_index, step_key FROM EventPath WHERE event_id IN ({})",
-                (0..n_events).map(|_| "?").collect::<Vec<_>>().join(","))
+                params(n_events))
     }
 }
 
@@ -711,14 +668,6 @@ impl SqliteQuery {
             item_id.kind().item_table_name(),
             item_id.kind()
         )
-    }
-}
-
-fn maybe_null(b: bool, s: &str) -> &str {
-    if b {
-        s
-    } else {
-        "NULL"
     }
 }
 
@@ -1013,6 +962,18 @@ pub trait GetItemsQueryGenerator {
     fn query_values(&self) -> Vec<QueryValue>;
 }
 
+fn maybe_null(b: bool, s: &str) -> &str {
+    if b {
+        s
+    } else {
+        "NULL"
+    }
+}
+
 fn current_millis() -> i64 {
     UNIX_EPOCH.elapsed().unwrap_or_default().as_millis() as i64
+}
+
+fn params(n: usize) -> String {
+    (0..n).map(|_| "?").collect::<Vec<_>>().join(",")
 }
