@@ -1,4 +1,4 @@
-//! Metadata.
+//! Metadata definitions.
 //!
 //! Please see [metadata_store.proto] for the detail of each component.
 //!

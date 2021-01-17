@@ -1,11 +1,14 @@
-use crate::errors;
+//! Builders of GET, PUT and POST requests that will be issued via [`MetadataStore`].
+use crate::errors::{self, PutError};
 use crate::metadata::{
     Artifact, ArtifactId, ArtifactState, ArtifactType, Context, ContextId, ContextType, Event,
     EventStep, EventType, Execution, ExecutionId, ExecutionState, ExecutionType, Id, PropertyType,
     PropertyTypes, PropertyValue, PropertyValues, TypeId, TypeKind,
 };
 use crate::metadata_store::{options, MetadataStore};
+use std::iter;
 
+/// Request builder for [`MetadataStore::put_artifact_type`].
 #[derive(Debug)]
 pub struct PutArtifactTypeRequest<'a> {
     store: &'a mut MetadataStore,
@@ -22,33 +25,47 @@ impl<'a> PutArtifactTypeRequest<'a> {
         }
     }
 
+    /// When specified, stored properties can be omitted in the request type.
+    ///
+    /// Otherwise, returns [`PutError::TypeAlreadyExists`]
+    /// if the stored type has properties not in the request type.
     pub fn can_omit_fields(mut self) -> Self {
         self.options.can_omit_fields = true;
         self
     }
 
+    /// When specified, new properties can be added.
+    ///
+    /// Otherwise, returns [`PutError::TypeAlreadyExists`]
+    /// if the request type has properties that are not in the stored type.
     pub fn can_add_fields(mut self) -> Self {
         self.options.can_add_fields = true;
         self
     }
 
+    /// Adds properties to the type.
     pub fn properties(mut self, properties: PropertyTypes) -> Self {
-        self.options.properties = properties;
+        self.options.properties.extend(properties);
         self
     }
 
+    /// Adds a property to the type.
     pub fn property(mut self, name: &str, ty: PropertyType) -> Self {
         self.options.properties.insert(name.to_owned(), ty);
         self
     }
 
-    pub async fn execute(self) -> Result<TypeId, errors::PutError> {
+    /// Inserts or updates an artifact type and returns the identifier of that.
+    ///
+    /// See [the official API doc](https://www.tensorflow.org/tfx/ml_metadata/api_docs/python/mlmd/metadata_store/MetadataStore#put_artifact_type) for the details.
+    pub async fn execute(self) -> Result<TypeId, PutError> {
         self.store
             .execute_put_type(TypeKind::Artifact, &self.type_name, self.options)
             .await
     }
 }
 
+/// Request builder for [`MetadataStore::get_artifact_types`].
 #[derive(Debug)]
 pub struct GetArtifactTypesRequest<'a> {
     store: &'a mut MetadataStore,
@@ -63,21 +80,26 @@ impl<'a> GetArtifactTypesRequest<'a> {
         }
     }
 
+    /// Specifies the type name of the target types.
     pub fn name(mut self, type_name: &str) -> Self {
         self.options.name = Some(type_name.to_owned());
         self
     }
 
-    pub fn id(mut self, type_id: TypeId) -> Self {
-        self.options.ids.insert(type_id);
-        self
+    /// Specifies the ID of the target type.
+    pub fn id(self, type_id: TypeId) -> Self {
+        self.ids(iter::once(type_id))
     }
 
+    /// Specifies the ID set of the target types.
     pub fn ids(mut self, type_ids: impl Iterator<Item = TypeId>) -> Self {
-        self.options.ids.extend(type_ids);
+        self.options.ids = type_ids.collect();
         self
     }
 
+    /// Gets specified artifact types.
+    ///
+    /// If multiple conditions are specified, types which satisfy all the conditions are returned.
     pub async fn execute(self) -> Result<Vec<ArtifactType>, errors::GetError> {
         self.store
             .execute_get_types(
@@ -93,6 +115,7 @@ impl<'a> GetArtifactTypesRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::put_execution_type`].
 #[derive(Debug)]
 pub struct PutExecutionTypeRequest<'a> {
     store: &'a mut MetadataStore,
@@ -109,33 +132,47 @@ impl<'a> PutExecutionTypeRequest<'a> {
         }
     }
 
+    /// When specified, stored properties can be omitted in the request type.
+    ///
+    /// Otherwise, returns [`PutError::TypeAlreadyExists`]
+    /// if the stored type has properties not in the request type.
     pub fn can_omit_fields(mut self) -> Self {
         self.options.can_omit_fields = true;
         self
     }
 
+    /// When specified, new properties can be added.
+    ///
+    /// Otherwise, returns [`PutError::TypeAlreadyExists`]
+    /// if the request type has properties that are not in the stored type.
     pub fn can_add_fields(mut self) -> Self {
         self.options.can_add_fields = true;
         self
     }
 
+    /// Adds properties to the type.
     pub fn properties(mut self, properties: PropertyTypes) -> Self {
         self.options.properties = properties;
         self
     }
 
+    /// Adds a property to the type.
     pub fn property(mut self, name: &str, ty: PropertyType) -> Self {
         self.options.properties.insert(name.to_owned(), ty);
         self
     }
 
-    pub async fn execute(self) -> Result<TypeId, errors::PutError> {
+    /// Inserts or updates an execution type and returns the identifier of that.
+    ///
+    /// See [the official API doc](https://www.tensorflow.org/tfx/ml_metadata/api_docs/python/mlmd/metadata_store/MetadataStore#put_execution_type) for the details.
+    pub async fn execute(self) -> Result<TypeId, PutError> {
         self.store
             .execute_put_type(TypeKind::Execution, &self.type_name, self.options)
             .await
     }
 }
 
+/// Request builder for [`MetadataStore::get_execution_types`].
 #[derive(Debug)]
 pub struct GetExecutionTypesRequest<'a> {
     store: &'a mut MetadataStore,
@@ -150,21 +187,26 @@ impl<'a> GetExecutionTypesRequest<'a> {
         }
     }
 
+    /// Specifies the type name of the target types.
     pub fn name(mut self, type_name: &str) -> Self {
         self.options.name = Some(type_name.to_owned());
         self
     }
 
-    pub fn id(mut self, type_id: TypeId) -> Self {
-        self.options.ids.insert(type_id);
-        self
+    /// Specifies the ID of the target type.
+    pub fn id(self, type_id: TypeId) -> Self {
+        self.ids(iter::once(type_id))
     }
 
+    /// Specifies the ID set of the target types.
     pub fn ids(mut self, type_ids: impl Iterator<Item = TypeId>) -> Self {
-        self.options.ids.extend(type_ids);
+        self.options.ids = type_ids.collect();
         self
     }
 
+    /// Gets specified execution types.
+    ///
+    /// If multiple conditions are specified, types which satisfy all the conditions are returned.
     pub async fn execute(self) -> Result<Vec<ExecutionType>, errors::GetError> {
         self.store
             .execute_get_types(
@@ -180,6 +222,7 @@ impl<'a> GetExecutionTypesRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::put_context_type`].
 #[derive(Debug)]
 pub struct PutContextTypeRequest<'a> {
     store: &'a mut MetadataStore,
@@ -196,33 +239,47 @@ impl<'a> PutContextTypeRequest<'a> {
         }
     }
 
+    /// When specified, stored properties can be omitted in the request type.
+    ///
+    /// Otherwise, returns [`PutError::TypeAlreadyExists`]
+    /// if the stored type has properties not in the request type.
     pub fn can_omit_fields(mut self) -> Self {
         self.options.can_omit_fields = true;
         self
     }
 
+    /// When specified, new properties can be added.
+    ///
+    /// Otherwise, returns [`PutError::TypeAlreadyExists`]
+    /// if the request type has properties that are not in the stored type.
     pub fn can_add_fields(mut self) -> Self {
         self.options.can_add_fields = true;
         self
     }
 
+    /// Adds properties to the type.
     pub fn properties(mut self, properties: PropertyTypes) -> Self {
         self.options.properties = properties;
         self
     }
 
+    /// Adds a property to the type.
     pub fn property(mut self, name: &str, ty: PropertyType) -> Self {
         self.options.properties.insert(name.to_owned(), ty);
         self
     }
 
-    pub async fn execute(self) -> Result<TypeId, errors::PutError> {
+    /// Inserts or updates a context type and returns the identifier of that.
+    ///
+    /// See [the official API doc](https://www.tensorflow.org/tfx/ml_metadata/api_docs/python/mlmd/metadata_store/MetadataStore#put_context_type) for the details.
+    pub async fn execute(self) -> Result<TypeId, PutError> {
         self.store
             .execute_put_type(TypeKind::Context, &self.type_name, self.options)
             .await
     }
 }
 
+/// Request builder for [`MetadataStore::get_context_types`].
 #[derive(Debug)]
 pub struct GetContextTypesRequest<'a> {
     store: &'a mut MetadataStore,
@@ -237,21 +294,26 @@ impl<'a> GetContextTypesRequest<'a> {
         }
     }
 
+    /// Specifies the type name of the target types.
     pub fn name(mut self, type_name: &str) -> Self {
         self.options.name = Some(type_name.to_owned());
         self
     }
 
-    pub fn id(mut self, type_id: TypeId) -> Self {
-        self.options.ids.insert(type_id);
-        self
+    /// Specifies the ID of the target type.
+    pub fn id(self, type_id: TypeId) -> Self {
+        self.ids(iter::once(type_id))
     }
 
+    /// Specifies the ID set of the target types.
     pub fn ids(mut self, type_ids: impl Iterator<Item = TypeId>) -> Self {
-        self.options.ids.extend(type_ids);
+        self.options.ids = type_ids.collect();
         self
     }
 
+    /// Gets specified context types.
+    ///
+    /// If multiple conditions are specified, types which satisfy all the conditions are returned.
     pub async fn execute(self) -> Result<Vec<ContextType>, errors::GetError> {
         self.store
             .execute_get_types(
@@ -660,7 +722,7 @@ impl<'a> PutArtifactRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<(), errors::PutError> {
+    pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_item(
                 Id::Artifact(self.id),
@@ -724,7 +786,7 @@ impl<'a> PutExecutionRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<(), errors::PutError> {
+    pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_item(
                 Id::Execution(self.id),
@@ -783,7 +845,7 @@ impl<'a> PutContextRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<(), errors::PutError> {
+    pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_item(
                 Id::Context(self.id),
@@ -813,7 +875,7 @@ impl<'a> PutAttributionRequest<'a> {
         }
     }
 
-    pub async fn execute(self) -> Result<(), errors::PutError> {
+    pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_relation(self.context_id, Id::Artifact(self.artifact_id))
             .await
@@ -840,7 +902,7 @@ impl<'a> PutAssociationRequest<'a> {
         }
     }
 
-    pub async fn execute(self) -> Result<(), errors::PutError> {
+    pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_relation(self.context_id, Id::Execution(self.execution_id))
             .await
@@ -884,7 +946,7 @@ impl<'a> PutEventRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<(), errors::PutError> {
+    pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_event(self.execution_id, self.artifact_id, self.options)
             .await

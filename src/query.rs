@@ -444,7 +444,7 @@ impl Query {
             ));
         }
         if !conditions.is_empty() {
-            query += &format!("WHERE {}", conditions.join(" OR "));
+            query += &format!("WHERE {}", conditions.join(" AND "));
         }
         query
     }
