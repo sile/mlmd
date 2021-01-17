@@ -1,8 +1,15 @@
+//! Metadata.
+//!
+//! Please see [metadata_store.proto] for the detail of each component.
+//!
+//! [metadata_store.proto]: https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/proto/metadata_store.proto
 use sqlx::Row as _;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+/// Type kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub enum TypeKind {
     Execution = 0,
     Artifact = 1,
@@ -29,14 +36,17 @@ impl std::fmt::Display for TypeKind {
     }
 }
 
+/// Type identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TypeId(i32);
 
 impl TypeId {
+    /// Makes a new identifier.
     pub const fn new(id: i32) -> Self {
         Self(id)
     }
 
+    /// Gets the value of this identifier.
     pub const fn get(self) -> i32 {
         self.0
     }
@@ -48,14 +58,17 @@ impl std::fmt::Display for TypeId {
     }
 }
 
+/// Artifact identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArtifactId(i32);
 
 impl ArtifactId {
+    /// Makes a new identifier.
     pub const fn new(id: i32) -> Self {
         Self(id)
     }
 
+    /// Gets the value of this identifier.
     pub const fn get(self) -> i32 {
         self.0
     }
@@ -67,14 +80,17 @@ impl std::fmt::Display for ArtifactId {
     }
 }
 
+/// Execution identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ExecutionId(i32);
 
 impl ExecutionId {
+    /// Makes a new identifier.
     pub const fn new(id: i32) -> Self {
         Self(id)
     }
 
+    /// Gets the value of this identifier.
     pub const fn get(self) -> i32 {
         self.0
     }
@@ -86,14 +102,17 @@ impl std::fmt::Display for ExecutionId {
     }
 }
 
+/// Context identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ContextId(i32);
 
 impl ContextId {
+    /// Makes a new identifier.
     pub const fn new(id: i32) -> Self {
         Self(id)
     }
 
+    /// Gets the value of this identifier.
     pub const fn get(self) -> i32 {
         self.0
     }
@@ -105,7 +124,9 @@ impl std::fmt::Display for ContextId {
     }
 }
 
+/// Identifier of artifact, execution or context.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[allow(missing_docs)]
 pub enum Id {
     Artifact(ArtifactId),
     Execution(ExecutionId),
@@ -113,6 +134,7 @@ pub enum Id {
 }
 
 impl Id {
+    /// Gets the value of this identifier.
     pub fn get(self) -> i32 {
         match self {
             Self::Artifact(x) => x.get(),
@@ -121,6 +143,7 @@ impl Id {
         }
     }
 
+    /// Gets the type kind of this identifier.
     pub fn kind(self) -> TypeKind {
         match self {
             Self::Artifact(_) => TypeKind::Artifact,
@@ -144,10 +167,15 @@ impl std::fmt::Display for Id {
     }
 }
 
+/// Property types.
 pub type PropertyTypes = BTreeMap<String, PropertyType>;
+
+/// Property values.
 pub type PropertyValues = BTreeMap<String, PropertyValue>;
 
+/// Property type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub enum PropertyType {
     Int = 1,
     Double = 2,
@@ -177,28 +205,36 @@ impl std::fmt::Display for PropertyType {
     }
 }
 
+/// Artifact type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub struct ArtifactType {
     pub id: TypeId,
     pub name: String,
     pub properties: PropertyTypes,
 }
 
+/// Execution type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub struct ExecutionType {
     pub id: TypeId,
     pub name: String,
     pub properties: PropertyTypes,
 }
 
+/// Context type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub struct ContextType {
     pub id: TypeId,
     pub name: String,
     pub properties: PropertyTypes,
 }
 
+/// Property value.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum PropertyValue {
     Int(i32),
     Double(f64),
@@ -206,6 +242,7 @@ pub enum PropertyValue {
 }
 
 impl PropertyValue {
+    /// Gets the type of this property.
     pub fn ty(&self) -> PropertyType {
         match self {
             Self::Int(_) => PropertyType::Int,
@@ -214,6 +251,9 @@ impl PropertyValue {
         }
     }
 
+    /// Gets the value of this property as [`i32`].
+    ///
+    /// If this is not a [`PropertyValue::Int`], [`None`] is returned .
     pub fn as_int(&self) -> Option<i32> {
         if let Self::Int(v) = &self {
             Some(*v)
@@ -222,6 +262,9 @@ impl PropertyValue {
         }
     }
 
+    /// Gets the value of this property as [`f64`].
+    ///
+    /// If this is not a [`PropertyValue::Double`], [`None`] is returned .
     pub fn as_double(&self) -> Option<f64> {
         if let Self::Double(v) = &self {
             Some(*v)
@@ -230,6 +273,9 @@ impl PropertyValue {
         }
     }
 
+    /// Gets the value of this property as [`String`].
+    ///
+    /// If this is not a [`PropertyValue::String`], [`None`] is returned .
     pub fn as_string(&self) -> Option<&String> {
         if let Self::String(v) = &self {
             Some(v)
@@ -263,7 +309,9 @@ impl<'a> From<&'a str> for PropertyValue {
     }
 }
 
+/// Artifact.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub struct Artifact {
     pub id: ArtifactId,
     pub type_id: TypeId,
@@ -291,8 +339,8 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Artifact {
         Ok(Self {
             id: ArtifactId::new(row.try_get("id")?),
             type_id: TypeId::new(row.try_get("type_id")?),
-            name: row.try_get("name")?,
-            uri: row.try_get("uri")?,
+            name: none_if_empty(row.try_get("name")?),
+            uri: none_if_empty(row.try_get("uri")?),
             properties: BTreeMap::new(),
             custom_properties: BTreeMap::new(),
             state: ArtifactState::from_i32(row.try_get("state")?)?,
@@ -306,17 +354,27 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Artifact {
     }
 }
 
+/// Artifact state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArtifactState {
+    /// Unknown state (default).
     Unknown = 0,
+
+    /// A state indicating that the artifact may exist.
     Pending = 1,
+
+    /// A state indicating that the artifact should exist, unless something external to the system deletes it.
     Live = 2,
+
+    /// A state indicating that the artifact should be deleted.
     MarkedForDeletion = 3,
+
+    /// A state indicating that the artifact has been deleted.
     Deleted = 4,
 }
 
 impl ArtifactState {
-    pub fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
+    pub(crate) fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
         match v {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::Pending),
@@ -330,7 +388,15 @@ impl ArtifactState {
     }
 }
 
+impl Default for ArtifactState {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+/// Execution.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub struct Execution {
     pub id: ExecutionId,
     pub type_id: TypeId,
@@ -357,7 +423,7 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Execution {
         Ok(Self {
             id: ExecutionId::new(row.try_get("id")?),
             type_id: TypeId::new(row.try_get("type_id")?),
-            name: row.try_get("name")?,
+            name: none_if_empty(row.try_get("name")?),
             properties: BTreeMap::new(),
             custom_properties: BTreeMap::new(),
             last_known_state: ExecutionState::from_i32(row.try_get("last_known_state")?)?,
@@ -371,19 +437,40 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Execution {
     }
 }
 
+/// Execution state.
+///
+/// The state transitions are `New -> Running -> Complete | Cached | Failed | Canceled`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExecutionState {
+    /// Unknown state (default).
     Unknown = 0,
+
+    /// The execution is created but not started yet.
     New = 1,
+
+    /// The execution is running.
     Running = 2,
+
+    /// The execution complete.
     Complete = 3,
+
+    /// The execution failed.
     Failed = 4,
+
+    /// The execution is skipped due to cached results.
     Cached = 5,
+
+    /// The execution is skipped due to precondition not met.
+    ///
+    /// It is different from [`Cached`](Self::Cached) in that a [`Canceled`](Self::Canceled)
+    /// execution will not have any event associated with it.
+    /// It is different from [`Failed`](Self::Failed) in that there is no
+    /// unexpected error happened and it is regarded as a normal state.
     Canceled = 6,
 }
 
 impl ExecutionState {
-    pub fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
+    pub(crate) fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
         match v {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::New),
@@ -399,7 +486,15 @@ impl ExecutionState {
     }
 }
 
+impl Default for ExecutionState {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+/// Context.
 #[derive(Debug, Clone, PartialEq)]
+#[allow(missing_docs)]
 pub struct Context {
     pub id: ContextId,
     pub type_id: TypeId,
@@ -438,7 +533,17 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Context {
     }
 }
 
+/// Event type.
+///
+/// Events distinguish between an artifact that is written by the execution
+/// (possibly as a cache), versus artifacts that are part of the declared
+/// output of the execution.
+///
+/// For more information on what `Declared` and `Iternal` mean, see [the comment on the original repo][comment].
+///
+/// [comment]: https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/proto/metadata_store.proto#L94-L161
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub enum EventType {
     Unknown = 0,
     DeclaredOutput = 1,
@@ -450,7 +555,7 @@ pub enum EventType {
 }
 
 impl EventType {
-    pub fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
+    pub(crate) fn from_i32(v: i32) -> Result<Self, sqlx::Error> {
         match v {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::DeclaredOutput),
@@ -466,17 +571,39 @@ impl EventType {
     }
 }
 
+impl Default for EventType {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+/// Event step.
+///
+/// A path (i.e., a vector of event steps) can name an artifact in the context of an execution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub enum EventStep {
     Index(i32),
     Key(String),
 }
 
+/// Event.
+///
+/// An event represents a relationship between an artifact and an execution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub struct Event {
     pub artifact_id: ArtifactId,
     pub execution_id: ExecutionId,
     pub path: Vec<EventStep>,
     pub ty: EventType,
     pub create_time_since_epoch: Duration,
+}
+
+fn none_if_empty(s: String) -> Option<String> {
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
