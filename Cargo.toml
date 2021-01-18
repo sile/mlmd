@@ -3,8 +3,14 @@ name = "mlmd"
 version = "0.1.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 edition = "2018"
+description = "A Rust implementation of ml-metadata"
+homepage = "https://github.com/sile/mlmd"
+repository = "https://github.com/sile/mlmd"
+readme = "README.md"
+license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[badges]
+coveralls = {repository = "sile/mlmd"}
 
 [dependencies]
 anyhow = "1"
