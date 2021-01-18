@@ -4,7 +4,7 @@ mlmd
 [![mlmd](https://img.shields.io/crates/v/mlmd.svg)](https://crates.io/crates/mlmd)
 [![Documentation](https://docs.rs/mlmd/badge.svg)](https://docs.rs/mlmd)
 [![Actions Status](https://github.com/sile/mlmd/workflows/CI/badge.svg)](https://github.com/sile/mlmd/actions)
-[![Coverage Status](https://coveralls.io/repos/github/sile/mlmd/badge.svg?branch=master)](https://coveralls.io/github/sile/mlmd?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/sile/mlmd/badge.svg?branch=main)](https://coveralls.io/github/sile/mlmd?branch=main)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A Rust implementation of [ml-metadata].
