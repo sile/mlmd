@@ -1,5 +1,5 @@
 //! Builders of GET, PUT and POST requests that will be issued via [`MetadataStore`].
-use crate::errors::{self, PutError};
+use crate::errors::{GetError, PostError, PutError};
 use crate::metadata::{
     Artifact, ArtifactId, ArtifactState, ArtifactType, Context, ContextId, ContextType, Event,
     EventStep, EventType, Execution, ExecutionId, ExecutionState, ExecutionType, Id, PropertyType,
@@ -102,7 +102,7 @@ impl<'a> GetArtifactTypesRequest<'a> {
     /// Gets specified artifact types.
     ///
     /// If multiple conditions are specified, types which satisfy all the conditions are returned.
-    pub async fn execute(self) -> Result<Vec<ArtifactType>, errors::GetError> {
+    pub async fn execute(self) -> Result<Vec<ArtifactType>, GetError> {
         self.store
             .execute_get_types(
                 TypeKind::Artifact,
@@ -211,7 +211,7 @@ impl<'a> GetExecutionTypesRequest<'a> {
     /// Gets specified execution types.
     ///
     /// If multiple conditions are specified, types which satisfy all the conditions are returned.
-    pub async fn execute(self) -> Result<Vec<ExecutionType>, errors::GetError> {
+    pub async fn execute(self) -> Result<Vec<ExecutionType>, GetError> {
         self.store
             .execute_get_types(
                 TypeKind::Execution,
@@ -320,7 +320,7 @@ impl<'a> GetContextTypesRequest<'a> {
     /// Gets specified context types.
     ///
     /// If multiple conditions are specified, types which satisfy all the conditions are returned.
-    pub async fn execute(self) -> Result<Vec<ContextType>, errors::GetError> {
+    pub async fn execute(self) -> Result<Vec<ContextType>, GetError> {
         self.store
             .execute_get_types(
                 TypeKind::Context,
@@ -335,6 +335,7 @@ impl<'a> GetContextTypesRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::get_artifacts`].
 #[derive(Debug)]
 pub struct GetArtifactsRequest<'a> {
     store: &'a mut MetadataStore,
@@ -342,51 +343,62 @@ pub struct GetArtifactsRequest<'a> {
 }
 
 impl<'a> GetArtifactsRequest<'a> {
-    pub fn new(store: &'a mut MetadataStore) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore) -> Self {
         Self {
             store,
             options: Default::default(),
         }
     }
 
+    /// Specifies the type of the target artifacts.
     pub fn ty(mut self, type_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self
     }
 
+    /// Specifies the type and name of the target artifact.
     pub fn type_and_name(mut self, type_name: &str, artifact_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self.options.artifact_name = Some(artifact_name.to_owned());
         self
     }
 
-    pub fn id(mut self, artifact_id: ArtifactId) -> Self {
-        self.options.artifact_ids.insert(artifact_id);
-        self
+    /// Specifies the ID of the target artifact.
+    ///
+    /// If you need to specify multiple IDs, please use [`ids`](Self::ids) instead.
+    pub fn id(self, artifact_id: ArtifactId) -> Self {
+        self.ids(iter::once(artifact_id))
     }
 
+    /// Specifies the ID set of the target artifacts.
     pub fn ids(mut self, artifact_ids: impl Iterator<Item = ArtifactId>) -> Self {
-        self.options.artifact_ids.extend(artifact_ids);
+        self.options.artifact_ids = artifact_ids.collect();
         self
     }
 
+    /// Specifies the URI of the target artifacts.
     pub fn uri(mut self, uri: &str) -> Self {
         self.options.uri = Some(uri.to_owned());
         self
     }
 
+    /// Specifies the context to which the target artifacts belong.
     pub fn context(mut self, context_id: ContextId) -> Self {
         self.options.context_id = Some(context_id);
         self
     }
 
-    pub async fn execute(self) -> Result<Vec<Artifact>, errors::GetError> {
+    /// Gets specified artifacts.
+    ///
+    /// If multiple conditions are specified, those which satisfy all the conditions are returned.
+    pub async fn execute(self) -> Result<Vec<Artifact>, GetError> {
         self.store
             .execute_get_items(options::GetItemsOptions::Artifact(self.options))
             .await
     }
 }
 
+/// Request builder for [`MetadataStore::get_executions`].
 #[derive(Debug)]
 pub struct GetExecutionsRequest<'a> {
     store: &'a mut MetadataStore,
@@ -394,46 +406,56 @@ pub struct GetExecutionsRequest<'a> {
 }
 
 impl<'a> GetExecutionsRequest<'a> {
-    pub fn new(store: &'a mut MetadataStore) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore) -> Self {
         Self {
             store,
             options: Default::default(),
         }
     }
 
+    /// Specifies the type of the target executions.
     pub fn ty(mut self, type_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self
     }
 
+    /// Specifies the type and name of the target execution.
     pub fn type_and_name(mut self, type_name: &str, execution_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self.options.execution_name = Some(execution_name.to_owned());
         self
     }
 
-    pub fn id(mut self, execution_id: ExecutionId) -> Self {
-        self.options.execution_ids.insert(execution_id);
-        self
+    /// Specifies the ID of the target execution.
+    ///
+    /// If you need to specify multiple IDs, please use [`ids`](Self::ids) instead.
+    pub fn id(self, execution_id: ExecutionId) -> Self {
+        self.ids(iter::once(execution_id))
     }
 
+    /// Specifies the ID set of the target executions.
     pub fn ids(mut self, execution_ids: impl Iterator<Item = ExecutionId>) -> Self {
-        self.options.execution_ids.extend(execution_ids);
+        self.options.execution_ids = execution_ids.collect();
         self
     }
 
+    /// Specifies the context to which the target executions belong.
     pub fn context(mut self, context_id: ContextId) -> Self {
         self.options.context_id = Some(context_id);
         self
     }
 
-    pub async fn execute(self) -> Result<Vec<Execution>, errors::GetError> {
+    /// Gets specified executions.
+    ///
+    /// If multiple conditions are specified, those which satisfy all the conditions are returned.
+    pub async fn execute(self) -> Result<Vec<Execution>, GetError> {
         self.store
             .execute_get_items(options::GetItemsOptions::Execution(self.options))
             .await
     }
 }
 
+/// Request builder for [`MetadataStore::get_contexts`].
 #[derive(Debug)]
 pub struct GetContextsRequest<'a> {
     store: &'a mut MetadataStore,
@@ -441,51 +463,62 @@ pub struct GetContextsRequest<'a> {
 }
 
 impl<'a> GetContextsRequest<'a> {
-    pub fn new(store: &'a mut MetadataStore) -> Self {
+    pub(crate) fn new(store: &'a mut MetadataStore) -> Self {
         Self {
             store,
             options: Default::default(),
         }
     }
 
+    /// Specifies the type of the target contexts.
     pub fn ty(mut self, type_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self
     }
 
+    /// Specifies the type and name of the target context.
     pub fn type_and_name(mut self, type_name: &str, context_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self.options.context_name = Some(context_name.to_owned());
         self
     }
 
-    pub fn id(mut self, context_id: ContextId) -> Self {
-        self.options.context_ids.insert(context_id);
-        self
+    /// Specifies the ID of the target context.
+    ///
+    /// If you need to specify multiple IDs, please use [`ids`](Self::ids) instead.
+    pub fn id(self, context_id: ContextId) -> Self {
+        self.ids(iter::once(context_id))
     }
 
+    /// Specifies the ID set of the target contexts.
     pub fn ids(mut self, context_ids: impl Iterator<Item = ContextId>) -> Self {
-        self.options.context_ids.extend(context_ids);
+        self.options.context_ids = context_ids.collect();
         self
     }
 
+    /// Specifies the artifact attributed to the target context.
     pub fn artifact(mut self, artifact_id: ArtifactId) -> Self {
         self.options.artifact_id = Some(artifact_id);
         self
     }
 
+    /// Specifies the execution associated to the target context.
     pub fn execution(mut self, execution_id: ExecutionId) -> Self {
         self.options.execution_id = Some(execution_id);
         self
     }
 
-    pub async fn execute(self) -> Result<Vec<Context>, errors::GetError> {
+    /// Gets specified contexts.
+    ///
+    /// If multiple conditions are specified, those which satisfy all the conditions are returned.
+    pub async fn execute(self) -> Result<Vec<Context>, GetError> {
         self.store
             .execute_get_items(options::GetItemsOptions::Context(self.options))
             .await
     }
 }
 
+/// Request builder for [`MetadataStore::post_artifact`].
 #[derive(Debug)]
 pub struct PostArtifactRequest<'a> {
     store: &'a mut MetadataStore,
@@ -502,26 +535,31 @@ impl<'a> PostArtifactRequest<'a> {
         }
     }
 
+    /// Sets the name of the artifact.
     pub fn name(mut self, name: &str) -> Self {
         self.options.name = Some(name.to_owned());
         self
     }
 
+    /// Sets the URI of the artifact.
     pub fn uri(mut self, uri: &str) -> Self {
         self.options.uri = Some(uri.to_owned());
         self
     }
 
+    /// Adds properties to the artifact.
     pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
+    /// Adds custom properties to the artifact.
     pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
+    /// Adds a property to the artifact.
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -530,6 +568,7 @@ impl<'a> PostArtifactRequest<'a> {
         self
     }
 
+    /// Adds a custom property to the artifact.
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -540,12 +579,14 @@ impl<'a> PostArtifactRequest<'a> {
         self
     }
 
+    /// Sets the state of the artifact.
     pub fn state(mut self, state: ArtifactState) -> Self {
         self.options.state = Some(state);
         self
     }
 
-    pub async fn execute(self) -> Result<ArtifactId, errors::PostError> {
+    /// Creates a new artifact and returns the ID.
+    pub async fn execute(self) -> Result<ArtifactId, PostError> {
         self.store
             .execute_post_item(self.type_id, options::ItemOptions::Artifact(self.options))
             .await
@@ -553,6 +594,7 @@ impl<'a> PostArtifactRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::post_execution`].
 #[derive(Debug)]
 pub struct PostExecutionRequest<'a> {
     store: &'a mut MetadataStore,
@@ -569,21 +611,25 @@ impl<'a> PostExecutionRequest<'a> {
         }
     }
 
+    /// Sets the name of the execution.
     pub fn name(mut self, name: &str) -> Self {
         self.options.name = Some(name.to_owned());
         self
     }
 
+    /// Adds properties to the execution.
     pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
+    /// Adds custom properties to the execution.
     pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
+    /// Adds a property to the execution.
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -592,6 +638,7 @@ impl<'a> PostExecutionRequest<'a> {
         self
     }
 
+    /// Adds a custom property to the execution.
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -602,12 +649,14 @@ impl<'a> PostExecutionRequest<'a> {
         self
     }
 
-    pub fn last_known_state(mut self, state: ExecutionState) -> Self {
+    /// Sets the state of the execution.
+    pub fn state(mut self, state: ExecutionState) -> Self {
         self.options.last_known_state = Some(state);
         self
     }
 
-    pub async fn execute(self) -> Result<ExecutionId, errors::PostError> {
+    /// Creates a new execution and returns the ID.
+    pub async fn execute(self) -> Result<ExecutionId, PostError> {
         self.store
             .execute_post_item(self.type_id, options::ItemOptions::Execution(self.options))
             .await
@@ -615,6 +664,7 @@ impl<'a> PostExecutionRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::post_context`].
 #[derive(Debug)]
 pub struct PostContextRequest<'a> {
     store: &'a mut MetadataStore,
@@ -633,16 +683,19 @@ impl<'a> PostContextRequest<'a> {
         }
     }
 
+    /// Adds properties to the context.
     pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
+    /// Adds custom properties to the context.
     pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
+    /// Adds a property to the context.
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -651,6 +704,7 @@ impl<'a> PostContextRequest<'a> {
         self
     }
 
+    /// Adds a custom property to the context.
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -661,7 +715,8 @@ impl<'a> PostContextRequest<'a> {
         self
     }
 
-    pub async fn execute(self) -> Result<ContextId, errors::PostError> {
+    /// Creates a new context and returns the ID.
+    pub async fn execute(self) -> Result<ContextId, PostError> {
         self.store
             .execute_post_item(self.type_id, options::ItemOptions::Context(self.options))
             .await
@@ -669,6 +724,7 @@ impl<'a> PostContextRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::put_artifact`].
 #[derive(Debug)]
 pub struct PutArtifactRequest<'a> {
     store: &'a mut MetadataStore,
@@ -685,26 +741,31 @@ impl<'a> PutArtifactRequest<'a> {
         }
     }
 
+    /// Sets the name of the artifact.
     pub fn name(mut self, name: &str) -> Self {
         self.options.name = Some(name.to_owned());
         self
     }
 
+    /// Sets the URI of the artifact.
     pub fn uri(mut self, uri: &str) -> Self {
         self.options.uri = Some(uri.to_owned());
         self
     }
 
+    /// Adds properties to the artifact.
     pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
+    /// Adds custom properties to the artifact.
     pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
+    /// Adds a property to the artifact.
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -713,6 +774,7 @@ impl<'a> PutArtifactRequest<'a> {
         self
     }
 
+    /// Adds a custom property to the artifact.
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -723,11 +785,13 @@ impl<'a> PutArtifactRequest<'a> {
         self
     }
 
+    /// Sets the state of the artifact.
     pub fn state(mut self, state: ArtifactState) -> Self {
         self.options.state = Some(state);
         self
     }
 
+    /// Updates this artifact.
     pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_item(
@@ -738,6 +802,7 @@ impl<'a> PutArtifactRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::put_execution`].
 #[derive(Debug)]
 pub struct PutExecutionRequest<'a> {
     store: &'a mut MetadataStore,
@@ -754,21 +819,25 @@ impl<'a> PutExecutionRequest<'a> {
         }
     }
 
+    /// Sets the name of the execution.
     pub fn name(mut self, name: &str) -> Self {
         self.options.name = Some(name.to_owned());
         self
     }
 
+    /// Adds properties to the execution.
     pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
+    /// Adds custom properties to the execution.
     pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
+    /// Adds a property to the execution.
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -777,6 +846,7 @@ impl<'a> PutExecutionRequest<'a> {
         self
     }
 
+    /// Adds a custom property to the execution.
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -787,11 +857,13 @@ impl<'a> PutExecutionRequest<'a> {
         self
     }
 
-    pub fn last_known_state(mut self, state: ExecutionState) -> Self {
+    /// Sets the state of the execution.
+    pub fn state(mut self, state: ExecutionState) -> Self {
         self.options.last_known_state = Some(state);
         self
     }
 
+    /// Updates this execution.
     pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_item(
@@ -802,6 +874,7 @@ impl<'a> PutExecutionRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::put_context`].
 #[derive(Debug)]
 pub struct PutContextRequest<'a> {
     store: &'a mut MetadataStore,
@@ -818,21 +891,25 @@ impl<'a> PutContextRequest<'a> {
         }
     }
 
+    /// Sets the name of the context.
     pub fn name(mut self, name: &str) -> Self {
         self.options.name = Some(name.to_owned());
         self
     }
 
+    /// Adds properties to the context.
     pub fn properties(mut self, properties: PropertyValues) -> Self {
         self.options.properties = properties;
         self
     }
 
+    /// Adds custom properties to the context.
     pub fn custom_properties(mut self, properties: PropertyValues) -> Self {
         self.options.custom_properties = properties;
         self
     }
 
+    /// Adds a property to the context.
     pub fn property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -841,6 +918,7 @@ impl<'a> PutContextRequest<'a> {
         self
     }
 
+    /// Adds a custom property to the context.
     pub fn custom_property<T>(mut self, key: &str, value: T) -> Self
     where
         T: Into<PropertyValue>,
@@ -851,6 +929,7 @@ impl<'a> PutContextRequest<'a> {
         self
     }
 
+    /// Update this context.
     pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_item(
@@ -861,6 +940,7 @@ impl<'a> PutContextRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::put_attribution`].
 #[derive(Debug)]
 pub struct PutAttributionRequest<'a> {
     store: &'a mut MetadataStore,
@@ -881,6 +961,9 @@ impl<'a> PutAttributionRequest<'a> {
         }
     }
 
+    /// Inserts a new attribution.
+    ///
+    /// If the same entry already exists, this call will be just ignored.
     pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_relation(self.context_id, Id::Artifact(self.artifact_id))
@@ -888,6 +971,7 @@ impl<'a> PutAttributionRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::put_association`].
 #[derive(Debug)]
 pub struct PutAssociationRequest<'a> {
     store: &'a mut MetadataStore,
@@ -908,6 +992,9 @@ impl<'a> PutAssociationRequest<'a> {
         }
     }
 
+    /// Inserts a new association.
+    ///
+    /// If the same entry already exists, this call will be just ignored.
     pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_relation(self.context_id, Id::Execution(self.execution_id))
@@ -915,6 +1002,7 @@ impl<'a> PutAssociationRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::put_event`].
 #[derive(Debug)]
 pub struct PutEventRequest<'a> {
     store: &'a mut MetadataStore,
@@ -937,21 +1025,25 @@ impl<'a> PutEventRequest<'a> {
         }
     }
 
+    /// Sets the type of this event.
     pub fn ty(mut self, event_type: EventType) -> Self {
         self.options.event_type = event_type;
         self
     }
 
-    pub fn path(mut self, path: &[EventStep]) -> Self {
-        self.options.path.extend_from_slice(path);
+    /// Adds a peth (i.e., steps) to this event.
+    pub fn path(mut self, path: impl Iterator<Item = EventStep>) -> Self {
+        self.options.path.extend(path);
         self
     }
 
+    /// Adds a step to this event.
     pub fn step(mut self, step: EventStep) -> Self {
         self.options.path.push(step);
         self
     }
 
+    /// Inserts a new event.
     pub async fn execute(self) -> Result<(), PutError> {
         self.store
             .execute_put_event(self.execution_id, self.artifact_id, self.options)
@@ -959,6 +1051,7 @@ impl<'a> PutEventRequest<'a> {
     }
 }
 
+/// Request builder for [`MetadataStore::get_events`].
 #[derive(Debug)]
 pub struct GetEventsRequest<'a> {
     store: &'a mut MetadataStore,
@@ -973,27 +1066,36 @@ impl<'a> GetEventsRequest<'a> {
         }
     }
 
-    pub fn execution(mut self, id: ExecutionId) -> Self {
-        self.options.execution_ids.insert(id);
-        self
+    /// Specifies the execution related to the target event.
+    ///
+    /// If you need to specify multiple executions, please use [`executions`](Self::executions) instead.
+    pub fn execution(self, id: ExecutionId) -> Self {
+        self.executions(iter::once(id))
     }
 
+    /// Specifies the executions related to the target events.
     pub fn executions(mut self, ids: impl Iterator<Item = ExecutionId>) -> Self {
-        self.options.execution_ids.extend(ids);
+        self.options.execution_ids = ids.collect();
         self
     }
 
-    pub fn artifact(mut self, id: ArtifactId) -> Self {
-        self.options.artifact_ids.insert(id);
-        self
+    /// Specifies the artifact related to the target event.
+    ///
+    /// If you need to specify multiple artifacts, please use [`artifacts`](Self::artifacts) instead.
+    pub fn artifact(self, id: ArtifactId) -> Self {
+        self.artifacts(iter::once(id))
     }
 
+    /// Specifies the artifacts related to the target events.
     pub fn artifacts(mut self, ids: impl Iterator<Item = ArtifactId>) -> Self {
-        self.options.artifact_ids.extend(ids);
+        self.options.artifact_ids = ids.collect();
         self
     }
 
-    pub async fn execute(self) -> Result<Vec<Event>, errors::GetError> {
+    /// Gets specified events.
+    ///
+    /// If multiple conditions are specified, those which satisfy all the conditions are returned.
+    pub async fn execute(self) -> Result<Vec<Event>, GetError> {
         self.store.execute_get_events(self.options).await
     }
 }

@@ -20,6 +20,9 @@ mod tests;
 
 const SCHEMA_VERSION: i32 = 6;
 
+/// Metadata store.
+///
+/// `MetadataStore` provides the API to operate on a database to store and fetch metadata.
 #[derive(Debug)]
 pub struct MetadataStore {
     connection: sqlx::AnyConnection,
@@ -27,10 +30,11 @@ pub struct MetadataStore {
 }
 
 impl MetadataStore {
+    /// Connects to the database specified by the given URI.
     pub async fn connect(database_uri: &str) -> Result<Self, InitError> {
-        let query = if database_uri.starts_with("sqlite:") {
+        let query = if database_uri.starts_with("sqlite") {
             Query::sqlite()
-        } else if database_uri.starts_with("mysql:") {
+        } else if database_uri.starts_with("mysql") {
             Query::mysql()
         } else {
             return Err(InitError::UnsupportedDatabase);
@@ -42,28 +46,115 @@ impl MetadataStore {
         Ok(this)
     }
 
+    /// Makes a request builder to put an artifact type.
     pub fn put_artifact_type(&mut self, type_name: &str) -> requests::PutArtifactTypeRequest {
         requests::PutArtifactTypeRequest::new(self, type_name)
     }
 
+    /// Makes a request builder to get artifact types.
     pub fn get_artifact_types(&mut self) -> requests::GetArtifactTypesRequest {
         requests::GetArtifactTypesRequest::new(self)
     }
 
+    /// Makes a request builder to put an execution type.
     pub fn put_execution_type(&mut self, type_name: &str) -> requests::PutExecutionTypeRequest {
         requests::PutExecutionTypeRequest::new(self, type_name)
     }
 
+    /// Makes a request builder to get execution types.
     pub fn get_execution_types(&mut self) -> requests::GetExecutionTypesRequest {
         requests::GetExecutionTypesRequest::new(self)
     }
 
+    /// Makes a request builder to put a context type.
     pub fn put_context_type(&mut self, type_name: &str) -> requests::PutContextTypeRequest {
         requests::PutContextTypeRequest::new(self, type_name)
     }
 
+    /// Makes a request builder to get context types.
     pub fn get_context_types(&mut self) -> requests::GetContextTypesRequest {
         requests::GetContextTypesRequest::new(self)
+    }
+
+    /// Makes a request builder to create a new artifact.
+    pub fn post_artifact(&mut self, type_id: TypeId) -> requests::PostArtifactRequest {
+        requests::PostArtifactRequest::new(self, type_id)
+    }
+
+    /// Makes a request builder to update an artifact.
+    pub fn put_artifact(&mut self, artifact_id: ArtifactId) -> requests::PutArtifactRequest {
+        requests::PutArtifactRequest::new(self, artifact_id)
+    }
+
+    /// Makes a request builder to get artifacts.
+    pub fn get_artifacts(&mut self) -> requests::GetArtifactsRequest {
+        requests::GetArtifactsRequest::new(self)
+    }
+
+    /// Makes a request builder to create a new execution.
+    pub fn post_execution(&mut self, type_id: TypeId) -> requests::PostExecutionRequest {
+        requests::PostExecutionRequest::new(self, type_id)
+    }
+
+    /// Makes a request builder to update an execution.
+    pub fn put_execution(&mut self, execution_id: ExecutionId) -> requests::PutExecutionRequest {
+        requests::PutExecutionRequest::new(self, execution_id)
+    }
+
+    /// Makes a request builder to get executions.
+    pub fn get_executions(&mut self) -> requests::GetExecutionsRequest {
+        requests::GetExecutionsRequest::new(self)
+    }
+
+    /// Makes a request builder to create a new context.
+    pub fn post_context(
+        &mut self,
+        type_id: TypeId,
+        context_name: &str,
+    ) -> requests::PostContextRequest {
+        requests::PostContextRequest::new(self, type_id, context_name)
+    }
+
+    /// Makes a request builder to update a context.
+    pub fn put_context(&mut self, context_id: ContextId) -> requests::PutContextRequest {
+        requests::PutContextRequest::new(self, context_id)
+    }
+
+    /// Makes a request builder to get contexts.
+    pub fn get_contexts(&mut self) -> requests::GetContextsRequest {
+        requests::GetContextsRequest::new(self)
+    }
+
+    /// Makes a request builder to create a new attribution.
+    pub fn put_attribution(
+        &mut self,
+        context_id: ContextId,
+        artifact_id: ArtifactId,
+    ) -> requests::PutAttributionRequest {
+        requests::PutAttributionRequest::new(self, context_id, artifact_id)
+    }
+
+    /// Makes a request builder to create a new association.
+    pub fn put_association(
+        &mut self,
+        context_id: ContextId,
+        execution_id: ExecutionId,
+    ) -> requests::PutAssociationRequest {
+        requests::PutAssociationRequest::new(self, context_id, execution_id)
+    }
+
+    /// Makes a request builder to create a new event.
+    pub fn put_event(
+        &mut self,
+        execution_id: ExecutionId,
+        artifact_id: ArtifactId,
+    ) -> requests::PutEventRequest {
+        requests::PutEventRequest::new(self, execution_id, artifact_id)
+    }
+
+    /// Makes a request builder to get events.
+    pub fn get_events(&mut self) -> requests::GetEventsRequest {
+        requests::GetEventsRequest::new(self)
     }
 
     pub(crate) async fn execute_post_item(
@@ -135,14 +226,6 @@ impl MetadataStore {
 
         connection.commit().await?;
         Ok(item_id)
-    }
-
-    pub fn post_artifact(&mut self, type_id: TypeId) -> requests::PostArtifactRequest {
-        requests::PostArtifactRequest::new(self, type_id)
-    }
-
-    pub fn get_artifacts(&mut self) -> requests::GetArtifactsRequest {
-        requests::GetArtifactsRequest::new(self)
     }
 
     async fn get_type_properties(
@@ -232,10 +315,6 @@ impl MetadataStore {
         Ok(())
     }
 
-    pub fn put_artifact(&mut self, artifact_id: ArtifactId) -> requests::PutArtifactRequest {
-        requests::PutArtifactRequest::new(self, artifact_id)
-    }
-
     pub(crate) async fn execute_get_items<T>(
         &mut self,
         options: GetItemsOptions,
@@ -268,34 +347,6 @@ impl MetadataStore {
         }
 
         Ok(items.into_iter().map(|(_, v)| v).collect())
-    }
-
-    pub fn post_execution(&mut self, type_id: TypeId) -> requests::PostExecutionRequest {
-        requests::PostExecutionRequest::new(self, type_id)
-    }
-
-    pub fn put_execution(&mut self, execution_id: ExecutionId) -> requests::PutExecutionRequest {
-        requests::PutExecutionRequest::new(self, execution_id)
-    }
-
-    pub fn get_executions(&mut self) -> requests::GetExecutionsRequest {
-        requests::GetExecutionsRequest::new(self)
-    }
-
-    pub fn post_context(
-        &mut self,
-        type_id: TypeId,
-        context_name: &str,
-    ) -> requests::PostContextRequest {
-        requests::PostContextRequest::new(self, type_id, context_name)
-    }
-
-    pub fn put_context(&mut self, context_id: ContextId) -> requests::PutContextRequest {
-        requests::PutContextRequest::new(self, context_id)
-    }
-
-    pub fn get_contexts(&mut self) -> requests::GetContextsRequest {
-        requests::GetContextsRequest::new(self)
     }
 
     pub(crate) async fn execute_put_relation(
@@ -337,30 +388,6 @@ impl MetadataStore {
         .await?;
 
         Ok(())
-    }
-
-    pub fn put_attribution(
-        &mut self,
-        context_id: ContextId,
-        artifact_id: ArtifactId,
-    ) -> requests::PutAttributionRequest {
-        requests::PutAttributionRequest::new(self, context_id, artifact_id)
-    }
-
-    pub fn put_association(
-        &mut self,
-        context_id: ContextId,
-        execution_id: ExecutionId,
-    ) -> requests::PutAssociationRequest {
-        requests::PutAssociationRequest::new(self, context_id, execution_id)
-    }
-
-    pub fn put_event(
-        &mut self,
-        execution_id: ExecutionId,
-        artifact_id: ArtifactId,
-    ) -> requests::PutEventRequest {
-        requests::PutEventRequest::new(self, execution_id, artifact_id)
     }
 
     pub(crate) async fn execute_put_event(
@@ -413,10 +440,6 @@ impl MetadataStore {
 
         connection.commit().await?;
         Ok(())
-    }
-
-    pub fn get_events(&mut self) -> requests::GetEventsRequest {
-        requests::GetEventsRequest::new(self)
     }
 
     pub(crate) async fn execute_get_events(

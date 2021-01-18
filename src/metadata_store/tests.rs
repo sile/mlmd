@@ -298,7 +298,7 @@ async fn put_execution_works() -> anyhow::Result<()> {
     store
         .put_execution(execution.id)
         .name(execution.name.as_ref().unwrap())
-        .last_known_state(execution.last_known_state)
+        .state(execution.last_known_state)
         .custom_properties(execution.custom_properties.clone())
         .execute()
         .await?;

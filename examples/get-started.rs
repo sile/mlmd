@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Register the Execution of a Trainer run");
     let trainer_run_id = store
         .post_execution(trainer_type_id)
-        .last_known_state(ExecutionState::Running)
+        .state(ExecutionState::Running)
         .execute()
         .await?;
 
@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Mark the execution as completed");
     store
         .put_execution(trainer_run_id)
-        .last_known_state(ExecutionState::Complete)
+        .state(ExecutionState::Complete)
         .execute()
         .await?;
 
