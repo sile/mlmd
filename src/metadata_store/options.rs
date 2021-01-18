@@ -37,9 +37,9 @@ pub enum ItemOptions {
 impl ItemOptions {
     pub fn name(&self) -> Option<&str> {
         match self {
-            Self::Artifact(x) => x.name.as_ref().map(|n| n.as_str()),
-            Self::Execution(x) => x.name.as_ref().map(|n| n.as_str()),
-            Self::Context(x) => x.name.as_ref().map(|n| n.as_str()),
+            Self::Artifact(x) => x.name.as_deref(),
+            Self::Execution(x) => x.name.as_deref(),
+            Self::Context(x) => x.name.as_deref(),
         }
     }
 

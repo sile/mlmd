@@ -166,7 +166,7 @@ impl MetadataStore {
         let property_types = self
             .get_type_properties(type_kind, type_id)
             .await?
-            .ok_or_else(|| PostError::TypeNotFound { type_kind, type_id })?;
+            .ok_or(PostError::TypeNotFound { type_kind, type_id })?;
         for (name, value) in options.properties() {
             if property_types.get(name).copied() != Some(value.ty()) {
                 return Err(PostError::UndefinedProperty {
@@ -241,7 +241,7 @@ impl MetadataStore {
             )
             .await?
             .into_iter()
-            .nth(0))
+            .next())
     }
 
     pub(crate) async fn execute_put_item(
@@ -254,12 +254,12 @@ impl MetadataStore {
             .fetch_optional(&mut self.connection)
             .await?
             .map(TypeId::new)
-            .ok_or_else(|| PutError::NotFound { item_id })?;
+            .ok_or(PutError::NotFound { item_id })?;
 
         let property_types = self
             .get_type_properties(item_id.kind(), type_id)
             .await?
-            .ok_or_else(|| PutError::TypeNotFound { type_id, item_id })?;
+            .ok_or(PutError::TypeNotFound { type_id, item_id })?;
         for (name, value) in options.properties() {
             if property_types.get(name).copied() != Some(value.ty()) {
                 return Err(PutError::UndefinedProperty {

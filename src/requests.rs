@@ -674,8 +674,10 @@ pub struct PostContextRequest<'a> {
 
 impl<'a> PostContextRequest<'a> {
     pub(crate) fn new(store: &'a mut MetadataStore, type_id: TypeId, context_name: &str) -> Self {
-        let mut options = options::ContextOptions::default();
-        options.name = Some(context_name.to_owned());
+        let options = options::ContextOptions {
+            name: Some(context_name.to_owned()),
+            ..Default::default()
+        };
         Self {
             store,
             type_id,
