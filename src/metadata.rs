@@ -336,6 +336,7 @@ impl crate::query::InsertProperty for Artifact {
 
 impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Artifact {
     fn from_row(row: &'a sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
+        let state: Option<i32> = row.try_get("state")?;
         Ok(Self {
             id: ArtifactId::new(row.try_get("id")?),
             type_id: TypeId::new(row.try_get("type_id")?),
@@ -343,7 +344,7 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Artifact {
             uri: none_if_empty(row.try_get("uri")?),
             properties: BTreeMap::new(),
             custom_properties: BTreeMap::new(),
-            state: ArtifactState::from_i32(row.try_get("state")?)?,
+            state: ArtifactState::from_i32(state.unwrap_or(ArtifactState::Unknown as i32))?,
             create_time_since_epoch: Duration::from_millis(
                 row.try_get::<i64, _>("create_time_since_epoch")? as u64,
             ),
@@ -420,13 +421,16 @@ impl crate::query::InsertProperty for Execution {
 
 impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Execution {
     fn from_row(row: &'a sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
+        let last_known_state: Option<i32> = row.try_get("last_known_state")?;
         Ok(Self {
             id: ExecutionId::new(row.try_get("id")?),
             type_id: TypeId::new(row.try_get("type_id")?),
             name: none_if_empty(row.try_get("name")?),
             properties: BTreeMap::new(),
             custom_properties: BTreeMap::new(),
-            last_known_state: ExecutionState::from_i32(row.try_get("last_known_state")?)?,
+            last_known_state: ExecutionState::from_i32(
+                last_known_state.unwrap_or(ExecutionState::Unknown as i32),
+            )?,
             create_time_since_epoch: Duration::from_millis(
                 row.try_get::<i64, _>("create_time_since_epoch")? as u64,
             ),
