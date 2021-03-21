@@ -5,7 +5,7 @@ use crate::metadata::{
 };
 use tempfile::NamedTempFile;
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn initialization_works() -> anyhow::Result<()> {
     // Create a new database.
     let file = NamedTempFile::new()?;
@@ -18,7 +18,7 @@ async fn initialization_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_artifact_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -69,7 +69,7 @@ async fn put_artifact_type_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_artifact_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -110,7 +110,7 @@ async fn get_artifact_type_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_artifact_types_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -121,7 +121,7 @@ async fn get_artifact_types_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_artifacts_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -163,7 +163,7 @@ async fn get_artifacts_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn post_artifact_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -214,7 +214,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_artifact_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -247,7 +247,7 @@ async fn put_artifact_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_executions_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -283,7 +283,7 @@ async fn get_executions_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_execution_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -312,7 +312,7 @@ async fn put_execution_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn post_execution_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -348,7 +348,7 @@ async fn post_execution_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_execution_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -399,7 +399,7 @@ async fn put_execution_type_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_execution_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -440,7 +440,7 @@ async fn get_execution_type_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_execution_types_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -450,7 +450,7 @@ async fn get_execution_types_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_contexts_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -501,7 +501,7 @@ async fn get_contexts_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_context_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -528,7 +528,7 @@ async fn put_context_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn post_context_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -554,7 +554,7 @@ async fn post_context_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_context_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -605,7 +605,7 @@ async fn put_context_type_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_context_type_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new()?;
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -646,7 +646,7 @@ async fn get_context_type_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_context_types_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
@@ -656,7 +656,7 @@ async fn get_context_types_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_attribution_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path()))
@@ -685,7 +685,7 @@ async fn put_attribution_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_association_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path()))
@@ -714,7 +714,7 @@ async fn put_association_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn put_event_works() -> anyhow::Result<()> {
     let file = NamedTempFile::new().unwrap();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path()))
@@ -757,7 +757,7 @@ async fn put_event_works() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_events_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;

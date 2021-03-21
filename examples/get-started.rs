@@ -10,7 +10,7 @@ struct Opt {
     database_uri: String,
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 

@@ -22,7 +22,7 @@ use mlmd::MetadataStore;
 use mlmd::metadata::EventType;
 use tempfile::NamedTempFile;
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Creates metadata store.
     let db_file = NamedTempFile::new()?;
