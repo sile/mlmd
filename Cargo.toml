@@ -1,6 +1,6 @@
 [package]
 name = "mlmd"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 edition = "2018"
 description = "A Rust implementation of ml-metadata"
@@ -12,10 +12,15 @@ license = "MIT"
 [badges]
 coveralls = {repository = "sile/mlmd"}
 
+[features]
+default = ["runtime-tokio-native-tls"]
+runtime-tokio-native-tls = ["sqlx/runtime-tokio-native-tls"]
+runtime-tokio-rustls = ["sqlx/runtime-tokio-rustls"]
+
 [dependencies]
 anyhow = "1"
 futures = "0.3"
-sqlx =  { version = "0.5", features = ["any", "mysql", "sqlite", "runtime-tokio-native-tls"] }
+sqlx =  { version = "0.5", features = ["any", "mysql", "sqlite"] }
 thiserror = "1"
 
 [dev-dependencies]
