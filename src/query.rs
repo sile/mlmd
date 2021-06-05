@@ -275,6 +275,21 @@ impl Query {
             sql += &format!("WHERE {}", conditions.join(" AND "));
         }
 
+        if let Some(field) = options.order_by {
+            sql += &format!(
+                " ORDER BY {} {}",
+                field.field_name(),
+                if options.desc { "DESC" } else { "ASC" }
+            );
+        }
+
+        if let Some(n) = options.limit {
+            sql += &format!(" LIMIT {}", n);
+            if let Some(n) = options.offset {
+                sql += &format!(" OFFSET {}", n);
+            }
+        }
+
         (sql, args)
     }
 
@@ -315,6 +330,21 @@ impl Query {
 
         if !conditions.is_empty() {
             sql += &format!("WHERE {}", conditions.join(" AND "));
+        }
+
+        if let Some(field) = options.order_by {
+            sql += &format!(
+                " ORDER BY {} {}",
+                field.field_name(),
+                if options.desc { "DESC" } else { "ASC" }
+            );
+        }
+
+        if let Some(n) = options.limit {
+            sql += &format!(" LIMIT {}", n);
+            if let Some(n) = options.offset {
+                sql += &format!(" OFFSET {}", n);
+            }
         }
 
         (sql, args)
@@ -365,6 +395,21 @@ impl Query {
 
         if !conditions.is_empty() {
             sql += &format!("WHERE {}", conditions.join(" AND "));
+        }
+
+        if let Some(field) = options.order_by {
+            sql += &format!(
+                " ORDER BY {} {}",
+                field.field_name(),
+                if options.desc { "DESC" } else { "ASC" }
+            );
+        }
+
+        if let Some(n) = options.limit {
+            sql += &format!(" LIMIT {}", n);
+            if let Some(n) = options.offset {
+                sql += &format!(" OFFSET {}", n);
+            }
         }
 
         (sql, args)

@@ -8,6 +8,71 @@ use crate::metadata::{
 use crate::metadata_store::{options, MetadataStore};
 use std::iter;
 
+/// Possible values for [`GetArtifactsRequest::order_by`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub enum ArtifactOrderByField {
+    Id,
+    Name,
+    Uri,
+    CreateTime,
+    UpdateTime,
+}
+
+impl ArtifactOrderByField {
+    pub(crate) fn field_name(self) -> &'static str {
+        match self {
+            Self::Id => "id",
+            Self::Name => "name",
+            Self::Uri => "uri",
+            Self::CreateTime => "create_time_since_epoch",
+            Self::UpdateTime => "last_update_time_since_epoch",
+        }
+    }
+}
+
+/// Possible values for [`GetExecutionsRequest::order_by`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub enum ExecutionOrderByField {
+    Id,
+    Name,
+    CreateTime,
+    UpdateTime,
+}
+
+impl ExecutionOrderByField {
+    pub(crate) fn field_name(self) -> &'static str {
+        match self {
+            Self::Id => "id",
+            Self::Name => "name",
+            Self::CreateTime => "create_time_since_epoch",
+            Self::UpdateTime => "last_update_time_since_epoch",
+        }
+    }
+}
+
+/// Possible values for [`GetContextsRequest::order_by`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub enum ContextOrderByField {
+    Id,
+    Name,
+    CreateTime,
+    UpdateTime,
+}
+
+impl ContextOrderByField {
+    pub(crate) fn field_name(self) -> &'static str {
+        match self {
+            Self::Id => "id",
+            Self::Name => "name",
+            Self::CreateTime => "create_time_since_epoch",
+            Self::UpdateTime => "last_update_time_since_epoch",
+        }
+    }
+}
+
 /// Request builder for [`MetadataStore::put_artifact_type`].
 #[derive(Debug)]
 pub struct PutArtifactTypeRequest<'a> {
@@ -388,6 +453,27 @@ impl<'a> GetArtifactsRequest<'a> {
         self
     }
 
+    /// Specifies how to order the result.
+    pub fn order_by(mut self, field: ArtifactOrderByField, asc: bool) -> Self {
+        self.options.order_by = Some(field);
+        self.options.desc = !asc;
+        self
+    }
+
+    /// Specifies the maximum number of the returned artifacts.
+    pub fn limit(mut self, n: usize) -> Self {
+        self.options.limit = Some(n);
+        self
+    }
+
+    /// Specifies how many leading artifacts are skipped from the result.
+    ///
+    /// Note that if `GetArtifactsRequest::limit` is not specified, this option has no effect.
+    pub fn offset(mut self, n: usize) -> Self {
+        self.options.offset = Some(n);
+        self
+    }
+
     /// Gets specified artifacts.
     ///
     /// If multiple conditions are specified, those which satisfy all the conditions are returned.
@@ -442,6 +528,27 @@ impl<'a> GetExecutionsRequest<'a> {
     /// Specifies the context to which the target executions belong.
     pub fn context(mut self, context_id: ContextId) -> Self {
         self.options.context_id = Some(context_id);
+        self
+    }
+
+    /// Specifies how to order the result.
+    pub fn order_by(mut self, field: ExecutionOrderByField, asc: bool) -> Self {
+        self.options.order_by = Some(field);
+        self.options.desc = !asc;
+        self
+    }
+
+    /// Specifies the maximum number of the returned executions.
+    pub fn limit(mut self, n: usize) -> Self {
+        self.options.limit = Some(n);
+        self
+    }
+
+    /// Specifies how many leading executions are skipped from the result.
+    ///
+    /// Note that if `GetExecutionsRequest::limit` is not specified, this option has no effect.
+    pub fn offset(mut self, n: usize) -> Self {
+        self.options.offset = Some(n);
         self
     }
 
@@ -505,6 +612,27 @@ impl<'a> GetContextsRequest<'a> {
     /// Specifies the execution associated to the target context.
     pub fn execution(mut self, execution_id: ExecutionId) -> Self {
         self.options.execution_id = Some(execution_id);
+        self
+    }
+
+    /// Specifies how to order the result.
+    pub fn order_by(mut self, field: ContextOrderByField, asc: bool) -> Self {
+        self.options.order_by = Some(field);
+        self.options.desc = !asc;
+        self
+    }
+
+    /// Specifies the maximum number of the returned contexts.
+    pub fn limit(mut self, n: usize) -> Self {
+        self.options.limit = Some(n);
+        self
+    }
+
+    /// Specifies how many leading contexts are skipped from the result.
+    ///
+    /// Note that if `GetContextsRequest::limit` is not specified, this option has no effect.
+    pub fn offset(mut self, n: usize) -> Self {
+        self.options.offset = Some(n);
         self
     }
 

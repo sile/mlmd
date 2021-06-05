@@ -3,6 +3,7 @@ use crate::metadata::{
     PropertyTypes, PropertyValues, TypeId, TypeKind,
 };
 use crate::query::QueryValue;
+use crate::requests::{ArtifactOrderByField, ContextOrderByField, ExecutionOrderByField};
 use std::collections::BTreeSet;
 
 #[derive(Debug, Default, Clone)]
@@ -122,6 +123,10 @@ pub struct GetArtifactsOptions {
     pub(crate) artifact_ids: BTreeSet<ArtifactId>,
     pub(crate) uri: Option<String>,
     pub(crate) context_id: Option<ContextId>,
+    pub(crate) limit: Option<usize>,
+    pub(crate) offset: Option<usize>,
+    pub(crate) order_by: Option<ArtifactOrderByField>,
+    pub(crate) desc: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -130,6 +135,10 @@ pub struct GetExecutionsOptions {
     pub(crate) execution_name: Option<String>,
     pub(crate) execution_ids: BTreeSet<ExecutionId>,
     pub(crate) context_id: Option<ContextId>,
+    pub(crate) limit: Option<usize>,
+    pub(crate) offset: Option<usize>,
+    pub(crate) order_by: Option<ExecutionOrderByField>,
+    pub(crate) desc: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -147,6 +156,10 @@ pub struct GetContextsOptions {
     pub(crate) context_ids: BTreeSet<ContextId>,
     pub(crate) artifact_id: Option<ArtifactId>,
     pub(crate) execution_id: Option<ExecutionId>,
+    pub(crate) limit: Option<usize>,
+    pub(crate) offset: Option<usize>,
+    pub(crate) order_by: Option<ContextOrderByField>,
+    pub(crate) desc: bool,
 }
 
 #[derive(Debug, Clone, Default)]
