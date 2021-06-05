@@ -325,9 +325,11 @@ impl MetadataStore {
         let (sql, args) = self.query.get_items(&options);
         let mut rows = sqlx::query_with(&sql, args).fetch(&mut self.connection);
         let mut items = BTreeMap::new();
+        let mut order = Vec::new();
         while let Some(row) = rows.try_next().await? {
             let id: i32 = row.try_get("id")?;
             items.insert(id, T::from_row(&row)?);
+            order.push(id);
         }
         std::mem::drop(rows);
         if items.is_empty() {
@@ -346,7 +348,13 @@ impl MetadataStore {
             item.insert_property(is_custom_property, name, value);
         }
 
-        Ok(items.into_iter().map(|(_, v)| v).collect())
+        let mut result = Vec::new();
+        for id in order {
+            if let Some(item) = items.remove(&id) {
+                result.push(item);
+            }
+        }
+        Ok(result)
     }
 
     pub(crate) async fn execute_put_relation(
