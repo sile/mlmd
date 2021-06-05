@@ -432,8 +432,8 @@ impl MetadataStore {
         for step in &options.path {
             let sql = self.query.insert_event_path(step);
             let query = match step {
-                EventStep::Index(v) => sqlx::query(&sql).bind(event_id).bind(*v),
-                EventStep::Key(v) => sqlx::query(&sql).bind(event_id).bind(v),
+                EventStep::Index(v) => sqlx::query(sql).bind(event_id).bind(*v),
+                EventStep::Key(v) => sqlx::query(sql).bind(event_id).bind(v),
             };
             query.execute(&mut connection).await?;
         }
