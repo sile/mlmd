@@ -16,6 +16,8 @@ coveralls = {repository = "sile/mlmd"}
 default = ["runtime-tokio-native-tls"]
 runtime-tokio-native-tls = ["sqlx/runtime-tokio-native-tls"]
 runtime-tokio-rustls = ["sqlx/runtime-tokio-rustls"]
+runtime-actix-native-tls = ["sqlx/runtime-actix-native-tls"]
+runtime-actix-rustls = ["sqlx/runtime-actix-rustls"]
 
 [dependencies]
 anyhow = "1"
