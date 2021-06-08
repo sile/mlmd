@@ -491,6 +491,20 @@ impl Query {
         if !conditions.is_empty() {
             query += &format!("WHERE {}", conditions.join(" AND "));
         }
+        if let Some(field) = options.order_by {
+            query += &format!(
+                " ORDER BY {} {}",
+                field.field_name(),
+                if options.desc { "DESC" } else { "ASC" }
+            );
+        }
+
+        if let Some(n) = options.limit {
+            query += &format!(" LIMIT {}", n);
+            if let Some(n) = options.offset {
+                query += &format!(" OFFSET {}", n);
+            }
+        }
         query
     }
 

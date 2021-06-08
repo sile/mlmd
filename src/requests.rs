@@ -73,6 +73,21 @@ impl ContextOrderByField {
     }
 }
 
+/// Possible values for [`GetEventsRequest::order_by`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub enum EventOrderByField {
+    CreateTime,
+}
+
+impl EventOrderByField {
+    pub(crate) fn field_name(self) -> &'static str {
+        match self {
+            Self::CreateTime => "milliseconds_since_epoch",
+        }
+    }
+}
+
 /// Request builder for [`MetadataStore::put_artifact_type`].
 #[derive(Debug)]
 pub struct PutArtifactTypeRequest<'a> {
@@ -1219,6 +1234,27 @@ impl<'a> GetEventsRequest<'a> {
     /// Specifies the artifacts related to the target events.
     pub fn artifacts(mut self, ids: impl Iterator<Item = ArtifactId>) -> Self {
         self.options.artifact_ids = ids.collect();
+        self
+    }
+
+    /// Specifies the maximum number of the returned events.
+    pub fn limit(mut self, n: usize) -> Self {
+        self.options.limit = Some(n);
+        self
+    }
+
+    /// Specifies how many leading events are skipped from the result.
+    ///
+    /// Note that if `GetEventsRequest::limit` is not specified, this option has no effect.
+    pub fn offset(mut self, n: usize) -> Self {
+        self.options.offset = Some(n);
+        self
+    }
+
+    /// Specifies how to order the result.
+    pub fn order_by(mut self, field: EventOrderByField, asc: bool) -> Self {
+        self.options.order_by = Some(field);
+        self.options.desc = !asc;
         self
     }
 

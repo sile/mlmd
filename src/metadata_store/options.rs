@@ -3,7 +3,9 @@ use crate::metadata::{
     PropertyTypes, PropertyValues, TypeId, TypeKind,
 };
 use crate::query::QueryValue;
-use crate::requests::{ArtifactOrderByField, ContextOrderByField, ExecutionOrderByField};
+use crate::requests::{
+    ArtifactOrderByField, ContextOrderByField, EventOrderByField, ExecutionOrderByField,
+};
 use std::collections::BTreeSet;
 
 #[derive(Debug, Default, Clone)]
@@ -188,4 +190,8 @@ impl Default for PutEventOptions {
 pub struct GetEventsOptions {
     pub(crate) artifact_ids: BTreeSet<ArtifactId>,
     pub(crate) execution_ids: BTreeSet<ExecutionId>,
+    pub(crate) limit: Option<usize>,
+    pub(crate) offset: Option<usize>,
+    pub(crate) order_by: Option<EventOrderByField>,
+    pub(crate) desc: bool,
 }
