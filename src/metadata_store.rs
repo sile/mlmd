@@ -476,7 +476,9 @@ impl MetadataStore {
 
         let mut events = BTreeMap::new();
         let mut rows = query.fetch(&mut self.connection);
+        let mut order = Vec::new();
         while let Some(row) = rows.try_next().await? {
+            order.push(row.id);
             events.insert(
                 row.id,
                 Event {
@@ -521,7 +523,13 @@ impl MetadataStore {
             });
         }
 
-        Ok(events.into_iter().map(|(_, v)| v).collect())
+        let mut result = Vec::new();
+        for id in order {
+            if let Some(event) = events.remove(&id) {
+                result.push(event);
+            }
+        }
+        Ok(result)
     }
 
     pub(crate) async fn execute_count_events(
