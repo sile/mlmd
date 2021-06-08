@@ -365,7 +365,7 @@ impl MetadataStore {
         let count: i32 = sqlx::query_scalar_with(&sql, args)
             .fetch_one(&mut self.connection)
             .await?;
-        return Ok(count as usize);
+        Ok(count as usize)
     }
 
     pub(crate) async fn execute_put_relation(
