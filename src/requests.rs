@@ -497,6 +497,15 @@ impl<'a> GetArtifactsRequest<'a> {
             .execute_get_items(options::GetItemsOptions::Artifact(self.options))
             .await
     }
+
+    /// Returns the number of artifacts that satisfy the specified conditions.
+    ///
+    /// This is equivalent to calling `self.execute().await?.len()` but more efficient.
+    pub async fn count(self) -> Result<usize, GetError> {
+        self.store
+            .execute_count_items(options::GetItemsOptions::Artifact(self.options))
+            .await
+    }
 }
 
 /// Request builder for [`MetadataStore::get_executions`].
@@ -573,6 +582,15 @@ impl<'a> GetExecutionsRequest<'a> {
     pub async fn execute(self) -> Result<Vec<Execution>, GetError> {
         self.store
             .execute_get_items(options::GetItemsOptions::Execution(self.options))
+            .await
+    }
+
+    /// Returns the number of executions that satisfy the specified conditions.
+    ///
+    /// This is equivalent to calling `self.execute().await?.len()` but more efficient.
+    pub async fn count(self) -> Result<usize, GetError> {
+        self.store
+            .execute_count_items(options::GetItemsOptions::Execution(self.options))
             .await
     }
 }
@@ -657,6 +675,15 @@ impl<'a> GetContextsRequest<'a> {
     pub async fn execute(self) -> Result<Vec<Context>, GetError> {
         self.store
             .execute_get_items(options::GetItemsOptions::Context(self.options))
+            .await
+    }
+
+    /// Returns the number of contexts that satisfy the specified conditions.
+    ///
+    /// This is equivalent to calling `self.execute().await?.len()` but more efficient.
+    pub async fn count(self) -> Result<usize, GetError> {
+        self.store
+            .execute_count_items(options::GetItemsOptions::Context(self.options))
             .await
     }
 }
@@ -1263,5 +1290,12 @@ impl<'a> GetEventsRequest<'a> {
     /// If multiple conditions are specified, those which satisfy all the conditions are returned.
     pub async fn execute(self) -> Result<Vec<Event>, GetError> {
         self.store.execute_get_events(self.options).await
+    }
+
+    /// Returns the number of events that satisfy the specified conditions.
+    ///
+    /// This is equivalent to calling `self.execute().await?.len()` but more efficient.
+    pub async fn count(self) -> Result<usize, GetError> {
+        self.store.execute_count_events(self.options).await
     }
 }

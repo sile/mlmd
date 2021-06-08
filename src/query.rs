@@ -224,20 +224,27 @@ impl Query {
         (sql, args)
     }
 
-    pub fn get_items(&self, options: &GetItemsOptions) -> (String, AnyArguments) {
+    pub fn get_items(&self, options: &GetItemsOptions, count: bool) -> (String, AnyArguments) {
         match options {
-            GetItemsOptions::Artifact(x) => self.get_artifacts(x),
-            GetItemsOptions::Execution(x) => self.get_executions(x),
-            GetItemsOptions::Context(x) => self.get_contexts(x),
+            GetItemsOptions::Artifact(x) => self.get_artifacts(x, count),
+            GetItemsOptions::Execution(x) => self.get_executions(x, count),
+            GetItemsOptions::Context(x) => self.get_contexts(x, count),
         }
     }
 
-    pub fn get_artifacts(&self, options: &GetArtifactsOptions) -> (String, AnyArguments) {
-        let mut sql = concat!(
-            "SELECT ",
-            "A.id, A.type_id, A.name, A.uri, A.state, A.create_time_since_epoch, A.last_update_time_since_epoch ",
-            "FROM Artifact as A ",
-        ).to_owned();
+    pub fn get_artifacts(
+        &self,
+        options: &GetArtifactsOptions,
+        count: bool,
+    ) -> (String, AnyArguments) {
+        let mut sql = format!(
+            "SELECT {} FROM Artifact as A ",
+            if count {
+                "COUNT(*)"
+            } else {
+                "A.id, A.type_id, A.name, A.uri, A.state, A.create_time_since_epoch, A.last_update_time_since_epoch "
+            }
+        );
         let mut args = AnyArguments::default();
 
         if options.type_name.is_some() {
@@ -293,12 +300,19 @@ impl Query {
         (sql, args)
     }
 
-    pub fn get_executions(&self, options: &GetExecutionsOptions) -> (String, AnyArguments) {
-        let mut sql = concat!(
-            "SELECT ",
-            "A.id, A.name, A.type_id, A.last_known_state, A.create_time_since_epoch, A.last_update_time_since_epoch ",
-            "FROM Execution as A ",
-        ).to_owned();
+    pub fn get_executions(
+        &self,
+        options: &GetExecutionsOptions,
+        count: bool,
+    ) -> (String, AnyArguments) {
+        let mut sql = format!(
+            "SELECT {} FROM Execution as A ",
+            if count {
+                "COUNT(*)"
+            } else {
+                "A.id, A.name, A.type_id, A.last_known_state, A.create_time_since_epoch, A.last_update_time_since_epoch "
+            }
+        );
         let mut args = AnyArguments::default();
 
         if options.type_name.is_some() {
@@ -350,13 +364,19 @@ impl Query {
         (sql, args)
     }
 
-    pub fn get_contexts(&self, options: &GetContextsOptions) -> (String, AnyArguments) {
-        let mut sql = concat!(
-            "SELECT ",
-            "A.id, A.name, A.type_id, A.create_time_since_epoch, A.last_update_time_since_epoch ",
-            "FROM Context as A ",
-        )
-        .to_owned();
+    pub fn get_contexts(
+        &self,
+        options: &GetContextsOptions,
+        count: bool,
+    ) -> (String, AnyArguments) {
+        let mut sql = format!(
+            "SELECT {} FROM Context as A ",
+            if count {
+                "COUNT(*)"
+            } else {
+                "A.id, A.name, A.type_id, A.create_time_since_epoch, A.last_update_time_since_epoch "
+            }
+        );
         let mut args = AnyArguments::default();
 
         if options.type_name.is_some() {
@@ -464,10 +484,15 @@ impl Query {
         }
     }
 
-    pub fn get_events(&self, options: &GetEventsOptions) -> String {
-        let mut query =
-            "SELECT Event.id, artifact_id, execution_id, Event.type, milliseconds_since_epoch FROM Event "
-            .to_owned();
+    pub fn get_events(&self, options: &GetEventsOptions, count: bool) -> String {
+        let mut query = format!(
+            "SELECT {} FROM Event ",
+            if count {
+                "count(*)"
+            } else {
+                "Event.id, artifact_id, execution_id, Event.type, milliseconds_since_epoch"
+            }
+        );
         if !options.artifact_ids.is_empty() {
             query += "JOIN Artifact ON Event.artifact_id = Artifact.id ";
         }

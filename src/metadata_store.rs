@@ -322,7 +322,7 @@ impl MetadataStore {
     where
         T: for<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> + InsertProperty,
     {
-        let (sql, args) = self.query.get_items(&options);
+        let (sql, args) = self.query.get_items(&options, false);
         let mut rows = sqlx::query_with(&sql, args).fetch(&mut self.connection);
         let mut items = BTreeMap::new();
         let mut order = Vec::new();
@@ -355,6 +355,17 @@ impl MetadataStore {
             }
         }
         Ok(result)
+    }
+
+    pub(crate) async fn execute_count_items(
+        &mut self,
+        options: GetItemsOptions,
+    ) -> Result<usize, GetError> {
+        let (sql, args) = self.query.get_items(&options, true);
+        let count: i32 = sqlx::query_scalar_with(&sql, args)
+            .fetch_one(&mut self.connection)
+            .await?;
+        return Ok(count as usize);
     }
 
     pub(crate) async fn execute_put_relation(
@@ -454,7 +465,7 @@ impl MetadataStore {
         &mut self,
         options: GetEventsOptions,
     ) -> Result<Vec<Event>, GetError> {
-        let sql = self.query.get_events(&options);
+        let sql = self.query.get_events(&options, false);
         let mut query = sqlx::query_as::<_, query::Event>(&sql);
         for id in &options.artifact_ids {
             query = query.bind(id.get());
@@ -511,6 +522,23 @@ impl MetadataStore {
         }
 
         Ok(events.into_iter().map(|(_, v)| v).collect())
+    }
+
+    pub(crate) async fn execute_count_events(
+        &mut self,
+        options: GetEventsOptions,
+    ) -> Result<usize, GetError> {
+        let sql = self.query.get_events(&options, true);
+        let mut query = sqlx::query_scalar(&sql);
+        for id in &options.artifact_ids {
+            query = query.bind(id.get());
+        }
+        for id in &options.execution_ids {
+            query = query.bind(id.get());
+        }
+
+        let count: i64 = query.fetch_one(&mut self.connection).await?;
+        Ok(count as usize)
     }
 
     async fn initialize_database(&mut self) -> Result<(), InitError> {
