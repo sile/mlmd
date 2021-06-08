@@ -480,6 +480,9 @@ impl MetadataStore {
             );
         }
         std::mem::drop(rows);
+        if events.is_empty() {
+            return Ok(Vec::new());
+        }
 
         let sql = self.query.get_event_paths(events.len());
         let mut query = sqlx::query_as::<_, query::EventPath>(&sql);
