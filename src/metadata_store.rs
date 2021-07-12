@@ -556,6 +556,7 @@ impl MetadataStore {
 
         match version {
             Ok(Some(SCHEMA_VERSION)) => Ok(()),
+            Ok(Some(7)) => Ok(()), // TODO: A tentative patch to be removed once https://github.com/sile/mlmd/issues/3 is addressed.
             Ok(Some(actual)) => Err(InitError::UnsupportedSchemaVersion {
                 actual,
                 expected: SCHEMA_VERSION,
