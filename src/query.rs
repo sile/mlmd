@@ -6,6 +6,7 @@ use crate::metadata_store::options::{
 };
 use sqlx::any::AnyArguments;
 use sqlx::Arguments as _;
+use std::ops::Bound;
 use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone)]
@@ -278,6 +279,70 @@ impl Query {
             args.add(v.get());
         }
 
+        match options
+            .create_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.start)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("? <= A.create_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("? < A.create_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .create_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.end)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("A.create_time_since_epoch <= ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("A.create_time_since_epoch < ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .update_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.start)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("? <= A.last_update_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("? < A.last_update_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .update_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.end)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("A.last_update_time_since_epoch <= ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("A.last_update_time_since_epoch < ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
         if !conditions.is_empty() {
             sql += &format!("WHERE {}", conditions.join(" AND "));
         }
@@ -340,6 +405,70 @@ impl Query {
         if let Some(v) = options.context_id {
             conditions.push("C.context_id = ?".to_owned());
             args.add(v.get());
+        }
+
+        match options
+            .create_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.start)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("? <= A.create_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("? < A.create_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .create_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.end)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("A.create_time_since_epoch <= ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("A.create_time_since_epoch < ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .update_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.start)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("? <= A.last_update_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("? < A.last_update_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .update_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.end)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("A.last_update_time_since_epoch <= ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("A.last_update_time_since_epoch < ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
         }
 
         if !conditions.is_empty() {
@@ -411,6 +540,70 @@ impl Query {
         if let Some(v) = options.execution_id {
             conditions.push("C.execution_id = ?".to_owned());
             args.add(v.get());
+        }
+
+        match options
+            .create_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.start)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("? <= A.create_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("? < A.create_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .create_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.end)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("A.create_time_since_epoch <= ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("A.create_time_since_epoch < ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .update_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.start)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("? <= A.last_update_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("? < A.last_update_time_since_epoch".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+        }
+
+        match options
+            .update_time
+            .clone()
+            .map_or(Bound::Unbounded, |x| x.end)
+        {
+            Bound::Unbounded => {}
+            Bound::Included(v) => {
+                conditions.push("A.last_update_time_since_epoch <= ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
+            Bound::Excluded(v) => {
+                conditions.push("A.last_update_time_since_epoch < ?".to_owned());
+                args.add(v.as_millis() as i64);
+            }
         }
 
         if !conditions.is_empty() {

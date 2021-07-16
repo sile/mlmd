@@ -7,6 +7,8 @@ use crate::metadata::{
 };
 use crate::metadata_store::{options, MetadataStore};
 use std::iter;
+use std::ops::{Bound, Range, RangeBounds};
+use std::time::Duration;
 
 /// Possible values for [`GetArtifactsRequest::order_by`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -489,6 +491,24 @@ impl<'a> GetArtifactsRequest<'a> {
         self
     }
 
+    /// Specifies creation time range.
+    pub fn create_time(mut self, range: impl RangeBounds<Duration>) -> Self {
+        self.options.create_time = Some(Range {
+            start: clone_bound(range.start_bound()),
+            end: clone_bound(range.end_bound()),
+        });
+        self
+    }
+
+    /// Specifies update time range.
+    pub fn update_time(mut self, range: impl RangeBounds<Duration>) -> Self {
+        self.options.update_time = Some(Range {
+            start: clone_bound(range.start_bound()),
+            end: clone_bound(range.end_bound()),
+        });
+        self
+    }
+
     /// Gets specified artifacts.
     ///
     /// If multiple conditions are specified, those which satisfy all the conditions are returned.
@@ -505,6 +525,14 @@ impl<'a> GetArtifactsRequest<'a> {
         self.store
             .execute_count_items(options::GetItemsOptions::Artifact(self.options))
             .await
+    }
+}
+
+fn clone_bound(x: Bound<&Duration>) -> Bound<Duration> {
+    match x {
+        Bound::Excluded(x) => Bound::Excluded(*x),
+        Bound::Included(x) => Bound::Included(*x),
+        Bound::Unbounded => Bound::Unbounded,
     }
 }
 
@@ -573,6 +601,24 @@ impl<'a> GetExecutionsRequest<'a> {
     /// Note that if `GetExecutionsRequest::limit` is not specified, this option has no effect.
     pub fn offset(mut self, n: usize) -> Self {
         self.options.offset = Some(n);
+        self
+    }
+
+    /// Specifies creation time range.
+    pub fn create_time(mut self, range: impl RangeBounds<Duration>) -> Self {
+        self.options.create_time = Some(Range {
+            start: clone_bound(range.start_bound()),
+            end: clone_bound(range.end_bound()),
+        });
+        self
+    }
+
+    /// Specifies update time range.
+    pub fn update_time(mut self, range: impl RangeBounds<Duration>) -> Self {
+        self.options.update_time = Some(Range {
+            start: clone_bound(range.start_bound()),
+            end: clone_bound(range.end_bound()),
+        });
         self
     }
 
@@ -666,6 +712,24 @@ impl<'a> GetContextsRequest<'a> {
     /// Note that if `GetContextsRequest::limit` is not specified, this option has no effect.
     pub fn offset(mut self, n: usize) -> Self {
         self.options.offset = Some(n);
+        self
+    }
+
+    /// Specifies creation time range.
+    pub fn create_time(mut self, range: impl RangeBounds<Duration>) -> Self {
+        self.options.create_time = Some(Range {
+            start: clone_bound(range.start_bound()),
+            end: clone_bound(range.end_bound()),
+        });
+        self
+    }
+
+    /// Specifies update time range.
+    pub fn update_time(mut self, range: impl RangeBounds<Duration>) -> Self {
+        self.options.update_time = Some(Range {
+            start: clone_bound(range.start_bound()),
+            end: clone_bound(range.end_bound()),
+        });
         self
     }
 

@@ -7,6 +7,8 @@ use crate::requests::{
     ArtifactOrderByField, ContextOrderByField, EventOrderByField, ExecutionOrderByField,
 };
 use std::collections::BTreeSet;
+use std::ops::{Bound, Range};
+use std::time::Duration;
 
 #[derive(Debug, Default, Clone)]
 pub struct GetTypesOptions {
@@ -129,6 +131,8 @@ pub struct GetArtifactsOptions {
     pub(crate) offset: Option<usize>,
     pub(crate) order_by: Option<ArtifactOrderByField>,
     pub(crate) desc: bool,
+    pub(crate) create_time: Option<Range<Bound<Duration>>>,
+    pub(crate) update_time: Option<Range<Bound<Duration>>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -141,6 +145,8 @@ pub struct GetExecutionsOptions {
     pub(crate) offset: Option<usize>,
     pub(crate) order_by: Option<ExecutionOrderByField>,
     pub(crate) desc: bool,
+    pub(crate) create_time: Option<Range<Bound<Duration>>>,
+    pub(crate) update_time: Option<Range<Bound<Duration>>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -162,6 +168,8 @@ pub struct GetContextsOptions {
     pub(crate) offset: Option<usize>,
     pub(crate) order_by: Option<ContextOrderByField>,
     pub(crate) desc: bool,
+    pub(crate) create_time: Option<Range<Bound<Duration>>>,
+    pub(crate) update_time: Option<Range<Bound<Duration>>>,
 }
 
 #[derive(Debug, Clone, Default)]
