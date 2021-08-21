@@ -683,14 +683,24 @@ impl<'a> GetContextsRequest<'a> {
     }
 
     /// Specifies the artifact attributed to the target context.
-    pub fn artifact(mut self, artifact_id: ArtifactId) -> Self {
-        self.options.artifact_id = Some(artifact_id);
+    pub fn artifact(self, artifact_id: ArtifactId) -> Self {
+        self.artifacts(iter::once(artifact_id))
+    }
+
+    /// Specifies the artifacts attributed to the target context.
+    pub fn artifacts(mut self, artifact_ids: impl Iterator<Item = ArtifactId>) -> Self {
+        self.options.artifact_ids = artifact_ids.collect();
         self
     }
 
     /// Specifies the execution associated to the target context.
-    pub fn execution(mut self, execution_id: ExecutionId) -> Self {
-        self.options.execution_id = Some(execution_id);
+    pub fn execution(self, execution_id: ExecutionId) -> Self {
+        self.executions(iter::once(execution_id))
+    }
+
+    /// Specifies the executions associated to the target context.
+    pub fn executions(mut self, execution_ids: impl Iterator<Item = ExecutionId>) -> Self {
+        self.options.execution_ids = execution_ids.collect();
         self
     }
 

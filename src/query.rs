@@ -511,10 +511,10 @@ impl Query {
         if options.type_name.is_some() {
             sql += "JOIN Type as T ON A.type_id = T.id ";
         };
-        if options.artifact_id.is_some() {
+        if !options.artifact_ids.is_empty() {
             sql += "JOIN Attribution as B ON A.id = B.context_id ";
         }
-        if options.execution_id.is_some() {
+        if !options.execution_ids.is_empty() {
             sql += "JOIN Association as C ON A.id = C.context_id ";
         }
 
@@ -533,13 +533,23 @@ impl Query {
                 args.add(id.get());
             }
         }
-        if let Some(v) = options.artifact_id {
-            conditions.push("B.artifact_id = ?".to_owned());
-            args.add(v.get());
+        if !options.artifact_ids.is_empty() {
+            conditions.push(format!(
+                "B.artifact_id IN ({})",
+                params(options.artifact_ids.len())
+            ));
+            for id in &options.artifact_ids {
+                args.add(id.get());
+            }
         }
-        if let Some(v) = options.execution_id {
-            conditions.push("C.execution_id = ?".to_owned());
-            args.add(v.get());
+        if !options.execution_ids.is_empty() {
+            conditions.push(format!(
+                "C.execution_id IN ({})",
+                params(options.execution_ids.len())
+            ));
+            for id in &options.execution_ids {
+                args.add(id.get());
+            }
         }
 
         match options
