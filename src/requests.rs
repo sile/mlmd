@@ -442,6 +442,17 @@ impl<'a> GetArtifactsRequest<'a> {
     pub fn type_and_name(mut self, type_name: &str, artifact_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self.options.artifact_name = Some(artifact_name.to_owned());
+        self.options.artifact_name_pattern = None;
+        self
+    }
+
+    /// Specifies the type and name pattern of the target artifacts.
+    ///
+    /// `artifact_name_pattern` can contain wildcard characters for the SQL LIKE statement.
+    pub fn type_and_name_pattern(mut self, type_name: &str, artifact_name_pattern: &str) -> Self {
+        self.options.type_name = Some(type_name.to_owned());
+        self.options.artifact_name_pattern = Some(artifact_name_pattern.to_owned());
+        self.options.artifact_name = None;
         self
     }
 
@@ -561,6 +572,17 @@ impl<'a> GetExecutionsRequest<'a> {
     pub fn type_and_name(mut self, type_name: &str, execution_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self.options.execution_name = Some(execution_name.to_owned());
+        self.options.execution_name_pattern = None;
+        self
+    }
+
+    /// Specifies the type and name pattern of the target executions.
+    ///
+    /// `execution_name_pattern` can contain wildcard characters for the SQL LIKE statement.
+    pub fn type_and_name_pattern(mut self, type_name: &str, execution_name_pattern: &str) -> Self {
+        self.options.type_name = Some(type_name.to_owned());
+        self.options.execution_name_pattern = Some(execution_name_pattern.to_owned());
+        self.options.execution_name = None;
         self
     }
 
@@ -666,6 +688,17 @@ impl<'a> GetContextsRequest<'a> {
     pub fn type_and_name(mut self, type_name: &str, context_name: &str) -> Self {
         self.options.type_name = Some(type_name.to_owned());
         self.options.context_name = Some(context_name.to_owned());
+        self.options.context_name_pattern = None;
+        self
+    }
+
+    /// Specifies the type and name pattern of the target contexts.
+    ///
+    /// `context_name_pattern` can contain wildcard characters for the SQL LIKE statement.
+    pub fn type_and_name_pattern(mut self, type_name: &str, context_name_pattern: &str) -> Self {
+        self.options.type_name = Some(type_name.to_owned());
+        self.options.context_name_pattern = Some(context_name_pattern.to_owned());
+        self.options.context_name = None;
         self
     }
 
