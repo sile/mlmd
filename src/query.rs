@@ -264,6 +264,10 @@ impl Query {
             conditions.push("A.name = ?".to_owned());
             args.add(v);
         }
+        if let Some(v) = options.artifact_name_pattern.clone() {
+            conditions.push("A.name LIKE ?".to_owned());
+            args.add(v);
+        }
         if !options.artifact_ids.is_empty() {
             conditions.push(format!("A.id IN ({})", params(options.artifact_ids.len())));
             for id in &options.artifact_ids {
@@ -396,6 +400,10 @@ impl Query {
             conditions.push("A.name = ?".to_owned());
             args.add(v);
         }
+        if let Some(v) = options.execution_name_pattern.clone() {
+            conditions.push("A.name LIKE ?".to_owned());
+            args.add(v);
+        }
         if !options.execution_ids.is_empty() {
             conditions.push(format!("A.id IN ({})", params(options.execution_ids.len())));
             for id in &options.execution_ids {
@@ -525,6 +533,10 @@ impl Query {
         }
         if let Some(v) = options.context_name.clone() {
             conditions.push("A.name = ?".to_owned());
+            args.add(v);
+        }
+        if let Some(v) = options.context_name_pattern.clone() {
+            conditions.push("A.name LIKE ?".to_owned());
             args.add(v);
         }
         if !options.context_ids.is_empty() {

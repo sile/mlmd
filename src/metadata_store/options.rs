@@ -124,6 +124,7 @@ pub struct ArtifactOptions {
 pub struct GetArtifactsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) artifact_name: Option<String>,
+    pub(crate) artifact_name_pattern: Option<String>,
     pub(crate) artifact_ids: BTreeSet<ArtifactId>,
     pub(crate) uri: Option<String>,
     pub(crate) context_id: Option<ContextId>,
@@ -139,6 +140,7 @@ pub struct GetArtifactsOptions {
 pub struct GetExecutionsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) execution_name: Option<String>,
+    pub(crate) execution_name_pattern: Option<String>,
     pub(crate) execution_ids: BTreeSet<ExecutionId>,
     pub(crate) context_id: Option<ContextId>,
     pub(crate) limit: Option<usize>,
@@ -161,6 +163,7 @@ pub struct ExecutionOptions {
 pub struct GetContextsOptions {
     pub(crate) type_name: Option<String>,
     pub(crate) context_name: Option<String>,
+    pub(crate) context_name_pattern: Option<String>,
     pub(crate) context_ids: BTreeSet<ContextId>,
     pub(crate) artifact_ids: BTreeSet<ArtifactId>,
     pub(crate) execution_ids: BTreeSet<ExecutionId>,
