@@ -804,6 +804,7 @@ impl SqliteQuery {
                 "   `int_value` INT, ",
                 "   `double_value` DOUBLE, ",
                 "   `string_value` TEXT, ",
+                "   `byte_value` BLOB, ",
                 " PRIMARY KEY (`artifact_id`, `name`, `is_custom_property`)); "
             ),
             concat!(
@@ -825,6 +826,7 @@ impl SqliteQuery {
                 "   `int_value` INT, ",
                 "   `double_value` DOUBLE, ",
                 "   `string_value` TEXT, ",
+                "   `byte_value` BLOB, ",
                 " PRIMARY KEY (`execution_id`, `name`, `is_custom_property`)); "
             ),
             concat!(
@@ -845,6 +847,7 @@ impl SqliteQuery {
                 "   `int_value` INT, ",
                 "   `double_value` DOUBLE, ",
                 "   `string_value` TEXT, ",
+                "   `byte_value` BLOB, ",
                 " PRIMARY KEY (`context_id`, `name`, `is_custom_property`)); "
             ),
             concat!(
@@ -859,7 +862,8 @@ impl SqliteQuery {
                 "   `artifact_id` INT NOT NULL, ",
                 "   `execution_id` INT NOT NULL, ",
                 "   `type` INT NOT NULL, ",
-                "   `milliseconds_since_epoch` INT ",
+                "   `milliseconds_since_epoch` INT, ",
+                "   UNIQUE(`artifact_id`, `execution_id`, `type`) ",
                 " ); "
             ),
             concat!(
@@ -906,10 +910,6 @@ impl SqliteQuery {
                 " ON `Artifact`(`last_update_time_since_epoch`); "
             ),
             concat!(
-                " CREATE INDEX IF NOT EXISTS `idx_event_artifact_id` ",
-                " ON `Event`(`artifact_id`); "
-            ),
-            concat!(
                 " CREATE INDEX IF NOT EXISTS `idx_event_execution_id` ",
                 " ON `Event`(`execution_id`); "
             ),
@@ -940,6 +940,55 @@ impl SqliteQuery {
                 " CREATE INDEX IF NOT EXISTS ",
                 "   `idx_context_last_update_time_since_epoch` ",
                 " ON `Context`(`last_update_time_since_epoch`); "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_eventpath_event_id` ",
+                " ON `EventPath`(`event_id`); "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_artifact_property_int` ",
+                " ON `ArtifactProperty`(`name`, `is_custom_property`, `int_value`) ",
+                " WHERE `int_value` IS NOT NULL; "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_artifact_property_double` ",
+                " ON `ArtifactProperty`(`name`, `is_custom_property`, `double_value`) ",
+                " WHERE `double_value` IS NOT NULL; "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_artifact_property_string` ",
+                " ON `ArtifactProperty`(`name`, `is_custom_property`, `string_value`) ",
+                " WHERE `string_value` IS NOT NULL; "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_execution_property_int` ",
+                " ON `ExecutionProperty`(`name`, `is_custom_property`, `int_value`) ",
+                " WHERE `int_value` IS NOT NULL; "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_execution_property_double` ",
+                " ON `ExecutionProperty`(`name`, `is_custom_property`, `double_value`) ",
+                " WHERE `double_value` IS NOT NULL; "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_execution_property_string` ",
+                " ON `ExecutionProperty`(`name`, `is_custom_property`, `string_value`) ",
+                " WHERE `string_value` IS NOT NULL; "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_context_property_int` ",
+                " ON `ContextProperty`(`name`, `is_custom_property`, `int_value`) ",
+                " WHERE `int_value` IS NOT NULL; "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_context_property_double` ",
+                " ON `ContextProperty`(`name`, `is_custom_property`, `double_value`) ",
+                " WHERE `double_value` IS NOT NULL; "
+            ),
+            concat!(
+                " CREATE INDEX IF NOT EXISTS `idx_context_property_string` ",
+                " ON `ContextProperty`(`name`, `is_custom_property`, `string_value`) ",
+                " WHERE `string_value` IS NOT NULL; "
             ),
         ]
     }
