@@ -174,7 +174,7 @@ async fn post_artifact_works() -> anyhow::Result<()> {
     assert!(store.get_artifacts().execute().await?.is_empty());
 
     let type_id = store
-        .put_artifact_type("Dataset")
+        .put_artifact_type("DataSet")
         .property("day", PropertyType::Int)
         .property("split", PropertyType::String)
         .execute()
