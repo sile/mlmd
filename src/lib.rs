@@ -1,9 +1,9 @@
 //! A Rust implementation of [ml-metadata].
 //!
-//! This crate supports the schema version 6 used in [ml-metadata-v0.25.0][v0.25.0] or later.
+//! This crate supports the schema version 8 used in [ml-metadata-v1.7.0][v1.7.0] or later.
 //!
 //! [ml-metadata]: https://github.com/google/ml-metadata
-//! [v0.25.0]: https://github.com/google/ml-metadata/releases/tag/v0.25.0
+//! [v1.7.0]: https://github.com/google/ml-metadata/releases/tag/v1.7.0
 //!
 //! # Examples
 //!
