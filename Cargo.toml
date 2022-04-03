@@ -2,7 +2,7 @@
 name = "mlmd"
 version = "0.2.12"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "A Rust implementation of ml-metadata"
 homepage = "https://github.com/sile/mlmd"
 repository = "https://github.com/sile/mlmd"
