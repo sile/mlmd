@@ -115,9 +115,9 @@ async fn get_artifact_types_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
     let types = store.get_artifact_types().execute().await?;
-    assert_eq!(types.len(), 2);
-    assert_eq!(types[0].name, "DataSet");
-    assert_eq!(types[1].name, "SavedModel");
+    assert_eq!(types.len(), 6);
+    assert_eq!(types[0].name, "mlmd.Dataset");
+    assert_eq!(types[1].name, "mlmd.Model");
     Ok(())
 }
 
@@ -127,12 +127,15 @@ async fn get_artifacts_works() -> anyhow::Result<()> {
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
 
     // All.
+    let mut artifact0 = artifact0();
+    artifact0.type_id = TypeId::new(10);
+
     let artifacts = store.get_artifacts().execute().await?;
-    assert_eq!(artifacts, vec![artifact0(), artifact1()]);
+    assert_eq!(artifacts, vec![artifact0.clone(), artifact1()]);
 
     // By type name.
     let artifacts = store.get_artifacts().ty("DataSet").execute().await?;
-    assert_eq!(artifacts, vec![artifact0()]);
+    assert_eq!(artifacts, vec![artifact0]);
 
     // By ID.
     let unregistered_id = ArtifactId::new(100);
@@ -171,12 +174,11 @@ async fn post_artifact_works() -> anyhow::Result<()> {
     assert!(store.get_artifacts().execute().await?.is_empty());
 
     let type_id = store
-        .put_artifact_type("DataSet")
+        .put_artifact_type("Dataset")
         .property("day", PropertyType::Int)
         .property("split", PropertyType::String)
         .execute()
         .await?;
-
     // Simple artifact.
     let artifact_id = store.post_artifact(type_id).execute().await?;
 
@@ -221,6 +223,7 @@ async fn put_artifact_works() -> anyhow::Result<()> {
     assert_eq!(store.get_artifacts().execute().await?.len(), 2);
 
     let mut artifact = artifact0();
+    artifact.type_id = TypeId::new(10);
     artifact.name = Some("foo".to_string());
     artifact.state = ArtifactState::Live;
     artifact
@@ -445,8 +448,8 @@ async fn get_execution_types_works() -> anyhow::Result<()> {
     let file = existing_db();
     let mut store = MetadataStore::connect(&sqlite_uri(file.path())).await?;
     let types = store.get_execution_types().execute().await?;
-    assert_eq!(types.len(), 1);
-    assert_eq!(types[0].name, "Trainer");
+    assert_eq!(types.len(), 6);
+    assert_eq!(types[0].name, "mlmd.Train");
     Ok(())
 }
 
@@ -468,7 +471,7 @@ async fn get_contexts_works() -> anyhow::Result<()> {
 
     let contexts = store
         .get_contexts()
-        .type_and_name("Experiment", "exp.27823")
+        .type_and_name("Experiment", "exp1")
         .execute()
         .await?;
     assert_eq!(contexts, vec![context0()]);
@@ -841,15 +844,15 @@ fn artifact0() -> Artifact {
         .collect(),
         custom_properties: BTreeMap::new(),
         state: ArtifactState::Unknown,
-        create_time_since_epoch: Duration::from_millis(1609134222018),
-        last_update_time_since_epoch: Duration::from_millis(1609134222239),
+        create_time_since_epoch: Duration::from_millis(1648979124872),
+        last_update_time_since_epoch: Duration::from_millis(1648979124872),
     }
 }
 
 fn artifact1() -> Artifact {
     Artifact {
         id: ArtifactId::new(2),
-        type_id: TypeId::new(2),
+        type_id: TypeId::new(11),
         name: None,
         uri: Some("path/to/model/file".to_owned()),
         properties: vec![
@@ -863,29 +866,34 @@ fn artifact1() -> Artifact {
         .collect(),
         custom_properties: BTreeMap::new(),
         state: ArtifactState::Unknown,
-        create_time_since_epoch: Duration::from_millis(1609134223250),
-        last_update_time_since_epoch: Duration::from_millis(1609134223518),
+        create_time_since_epoch: Duration::from_millis(1648979124885),
+        last_update_time_since_epoch: Duration::from_millis(1648979124885),
     }
 }
 
 fn execution0() -> Execution {
     Execution {
         id: ExecutionId::new(1),
-        type_id: TypeId::new(3),
+        type_id: TypeId::new(12),
         name: None,
-        last_known_state: ExecutionState::Complete,
-        properties: BTreeMap::new(),
+        last_known_state: ExecutionState::Unknown,
+        properties: vec![(
+            "state".to_owned(),
+            PropertyValue::String("COMPLETED".to_owned()),
+        )]
+        .into_iter()
+        .collect(),
         custom_properties: BTreeMap::new(),
-        create_time_since_epoch: Duration::from_millis(1609134222505),
-        last_update_time_since_epoch: Duration::from_millis(1609134224027),
+        create_time_since_epoch: Duration::from_millis(1648979124878),
+        last_update_time_since_epoch: Duration::from_millis(1648979124891),
     }
 }
 
 fn context0() -> Context {
     Context {
         id: ContextId::new(1),
-        type_id: TypeId::new(4),
-        name: "exp.27823".to_owned(),
+        type_id: TypeId::new(13),
+        name: "exp1".to_owned(),
         properties: vec![(
             "note".to_owned(),
             PropertyValue::String("My first experiment.".to_owned()),
@@ -893,8 +901,8 @@ fn context0() -> Context {
         .into_iter()
         .collect(),
         custom_properties: BTreeMap::new(),
-        create_time_since_epoch: Duration::from_millis(1609134224698),
-        last_update_time_since_epoch: Duration::from_millis(1609134224922),
+        create_time_since_epoch: Duration::from_millis(1648979124896),
+        last_update_time_since_epoch: Duration::from_millis(1648979124896),
     }
 }
 
@@ -904,7 +912,7 @@ fn event0() -> Event {
         execution_id: ExecutionId::new(1),
         path: Vec::new(),
         ty: EventType::DeclaredInput,
-        create_time_since_epoch: Duration::from_millis(1609134223004),
+        create_time_since_epoch: Duration::from_millis(1648979124882),
     }
 }
 
@@ -914,6 +922,6 @@ fn event1() -> Event {
         execution_id: ExecutionId::new(1),
         path: Vec::new(),
         ty: EventType::DeclaredOutput,
-        create_time_since_epoch: Duration::from_millis(1609134223788),
+        create_time_since_epoch: Duration::from_millis(1648979124888),
     }
 }
