@@ -97,7 +97,10 @@ impl MetadataStore {
     }
 
     /// Makes a request builder to update an execution.
-    pub fn put_execution(&mut self, execution_id: ExecutionId) -> requests::PutExecutionRequest<'_> {
+    pub fn put_execution(
+        &mut self,
+        execution_id: ExecutionId,
+    ) -> requests::PutExecutionRequest<'_> {
         requests::PutExecutionRequest::new(self, execution_id)
     }
 

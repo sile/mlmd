@@ -356,8 +356,7 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Artifact {
 }
 
 /// Artifact state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ArtifactState {
     /// Unknown state (default).
     #[default]
@@ -390,7 +389,6 @@ impl ArtifactState {
         }
     }
 }
-
 
 /// Execution.
 #[derive(Debug, Clone, PartialEq)]
@@ -441,8 +439,7 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Execution {
 /// Execution state.
 ///
 /// The state transitions are `New -> Running -> Complete | Cached | Failed | Canceled`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ExecutionState {
     /// Unknown state (default).
     #[default]
@@ -488,7 +485,6 @@ impl ExecutionState {
         }
     }
 }
-
 
 /// Context.
 #[derive(Debug, Clone, PartialEq)]
@@ -570,7 +566,6 @@ impl EventType {
         }
     }
 }
-
 
 /// Event step.
 ///

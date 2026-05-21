@@ -109,7 +109,11 @@ impl Query {
         "SELECT count(*) FROM Execution WHERE id=?"
     }
 
-    pub fn insert_item(&self, type_id: TypeId, options: &ItemOptions) -> (String, AnyArguments<'_>) {
+    pub fn insert_item(
+        &self,
+        type_id: TypeId,
+        options: &ItemOptions,
+    ) -> (String, AnyArguments<'_>) {
         let current_millis = current_millis();
 
         let mut fields = vec![
