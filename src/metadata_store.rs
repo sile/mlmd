@@ -47,62 +47,62 @@ impl MetadataStore {
     }
 
     /// Makes a request builder to put an artifact type.
-    pub fn put_artifact_type(&mut self, type_name: &str) -> requests::PutArtifactTypeRequest {
+    pub fn put_artifact_type(&mut self, type_name: &str) -> requests::PutArtifactTypeRequest<'_> {
         requests::PutArtifactTypeRequest::new(self, type_name)
     }
 
     /// Makes a request builder to get artifact types.
-    pub fn get_artifact_types(&mut self) -> requests::GetArtifactTypesRequest {
+    pub fn get_artifact_types(&mut self) -> requests::GetArtifactTypesRequest<'_> {
         requests::GetArtifactTypesRequest::new(self)
     }
 
     /// Makes a request builder to put an execution type.
-    pub fn put_execution_type(&mut self, type_name: &str) -> requests::PutExecutionTypeRequest {
+    pub fn put_execution_type(&mut self, type_name: &str) -> requests::PutExecutionTypeRequest<'_> {
         requests::PutExecutionTypeRequest::new(self, type_name)
     }
 
     /// Makes a request builder to get execution types.
-    pub fn get_execution_types(&mut self) -> requests::GetExecutionTypesRequest {
+    pub fn get_execution_types(&mut self) -> requests::GetExecutionTypesRequest<'_> {
         requests::GetExecutionTypesRequest::new(self)
     }
 
     /// Makes a request builder to put a context type.
-    pub fn put_context_type(&mut self, type_name: &str) -> requests::PutContextTypeRequest {
+    pub fn put_context_type(&mut self, type_name: &str) -> requests::PutContextTypeRequest<'_> {
         requests::PutContextTypeRequest::new(self, type_name)
     }
 
     /// Makes a request builder to get context types.
-    pub fn get_context_types(&mut self) -> requests::GetContextTypesRequest {
+    pub fn get_context_types(&mut self) -> requests::GetContextTypesRequest<'_> {
         requests::GetContextTypesRequest::new(self)
     }
 
     /// Makes a request builder to create a new artifact.
-    pub fn post_artifact(&mut self, type_id: TypeId) -> requests::PostArtifactRequest {
+    pub fn post_artifact(&mut self, type_id: TypeId) -> requests::PostArtifactRequest<'_> {
         requests::PostArtifactRequest::new(self, type_id)
     }
 
     /// Makes a request builder to update an artifact.
-    pub fn put_artifact(&mut self, artifact_id: ArtifactId) -> requests::PutArtifactRequest {
+    pub fn put_artifact(&mut self, artifact_id: ArtifactId) -> requests::PutArtifactRequest<'_> {
         requests::PutArtifactRequest::new(self, artifact_id)
     }
 
     /// Makes a request builder to get artifacts.
-    pub fn get_artifacts(&mut self) -> requests::GetArtifactsRequest {
+    pub fn get_artifacts(&mut self) -> requests::GetArtifactsRequest<'_> {
         requests::GetArtifactsRequest::new(self)
     }
 
     /// Makes a request builder to create a new execution.
-    pub fn post_execution(&mut self, type_id: TypeId) -> requests::PostExecutionRequest {
+    pub fn post_execution(&mut self, type_id: TypeId) -> requests::PostExecutionRequest<'_> {
         requests::PostExecutionRequest::new(self, type_id)
     }
 
     /// Makes a request builder to update an execution.
-    pub fn put_execution(&mut self, execution_id: ExecutionId) -> requests::PutExecutionRequest {
+    pub fn put_execution(&mut self, execution_id: ExecutionId) -> requests::PutExecutionRequest<'_> {
         requests::PutExecutionRequest::new(self, execution_id)
     }
 
     /// Makes a request builder to get executions.
-    pub fn get_executions(&mut self) -> requests::GetExecutionsRequest {
+    pub fn get_executions(&mut self) -> requests::GetExecutionsRequest<'_> {
         requests::GetExecutionsRequest::new(self)
     }
 
@@ -111,17 +111,17 @@ impl MetadataStore {
         &mut self,
         type_id: TypeId,
         context_name: &str,
-    ) -> requests::PostContextRequest {
+    ) -> requests::PostContextRequest<'_> {
         requests::PostContextRequest::new(self, type_id, context_name)
     }
 
     /// Makes a request builder to update a context.
-    pub fn put_context(&mut self, context_id: ContextId) -> requests::PutContextRequest {
+    pub fn put_context(&mut self, context_id: ContextId) -> requests::PutContextRequest<'_> {
         requests::PutContextRequest::new(self, context_id)
     }
 
     /// Makes a request builder to get contexts.
-    pub fn get_contexts(&mut self) -> requests::GetContextsRequest {
+    pub fn get_contexts(&mut self) -> requests::GetContextsRequest<'_> {
         requests::GetContextsRequest::new(self)
     }
 
@@ -130,7 +130,7 @@ impl MetadataStore {
         &mut self,
         context_id: ContextId,
         artifact_id: ArtifactId,
-    ) -> requests::PutAttributionRequest {
+    ) -> requests::PutAttributionRequest<'_> {
         requests::PutAttributionRequest::new(self, context_id, artifact_id)
     }
 
@@ -139,7 +139,7 @@ impl MetadataStore {
         &mut self,
         context_id: ContextId,
         execution_id: ExecutionId,
-    ) -> requests::PutAssociationRequest {
+    ) -> requests::PutAssociationRequest<'_> {
         requests::PutAssociationRequest::new(self, context_id, execution_id)
     }
 
@@ -148,12 +148,12 @@ impl MetadataStore {
         &mut self,
         execution_id: ExecutionId,
         artifact_id: ArtifactId,
-    ) -> requests::PutEventRequest {
+    ) -> requests::PutEventRequest<'_> {
         requests::PutEventRequest::new(self, execution_id, artifact_id)
     }
 
     /// Makes a request builder to get events.
-    pub fn get_events(&mut self) -> requests::GetEventsRequest {
+    pub fn get_events(&mut self) -> requests::GetEventsRequest<'_> {
         requests::GetEventsRequest::new(self)
     }
 

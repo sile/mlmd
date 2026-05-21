@@ -72,7 +72,7 @@ impl ItemOptions {
         }
     }
 
-    pub fn extra_fields(&self) -> Vec<(&'static str, QueryValue)> {
+    pub fn extra_fields(&self) -> Vec<(&'static str, QueryValue<'_>)> {
         let mut fields = Vec::new();
         match self {
             Self::Artifact(x) => {

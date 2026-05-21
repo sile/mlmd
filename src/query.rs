@@ -45,7 +45,7 @@ impl Query {
         }
     }
 
-    pub fn get_type_id(&self, item_id: Id) -> (String, AnyArguments) {
+    pub fn get_type_id(&self, item_id: Id) -> (String, AnyArguments<'_>) {
         let sql = format!(
             "SELECT type_id FROM {} WHERE id = ?",
             item_id.kind().item_table_name(),
@@ -109,7 +109,7 @@ impl Query {
         "SELECT count(*) FROM Execution WHERE id=?"
     }
 
-    pub fn insert_item(&self, type_id: TypeId, options: &ItemOptions) -> (String, AnyArguments) {
+    pub fn insert_item(&self, type_id: TypeId, options: &ItemOptions) -> (String, AnyArguments<'_>) {
         let current_millis = current_millis();
 
         let mut fields = vec![
@@ -143,7 +143,7 @@ impl Query {
         (sql, args)
     }
 
-    pub fn update_item(&self, item_id: Id, options: &ItemOptions) -> (String, AnyArguments) {
+    pub fn update_item(&self, item_id: Id, options: &ItemOptions) -> (String, AnyArguments<'_>) {
         let mut fields = "last_update_time_since_epoch=?".to_owned();
         let mut args = AnyArguments::default();
         args.add(current_millis());
@@ -176,7 +176,7 @@ impl Query {
         property_name: &str,
         value: &PropertyValue,
         is_custom: bool,
-    ) -> (String, AnyArguments) {
+    ) -> (String, AnyArguments<'_>) {
         let sql = self.upsert_item_property_sql(item_id, value);
         let mut args = AnyArguments::default();
         args.add(item_id.get());
@@ -203,7 +203,7 @@ impl Query {
         &self,
         type_kind: TypeKind,
         ids: impl Iterator<Item = i32>,
-    ) -> (String, AnyArguments) {
+    ) -> (String, AnyArguments<'_>) {
         let mut n = 0;
         let mut args = AnyArguments::default();
         for id in ids {
@@ -225,7 +225,7 @@ impl Query {
         (sql, args)
     }
 
-    pub fn get_items(&self, options: &GetItemsOptions, count: bool) -> (String, AnyArguments) {
+    pub fn get_items(&self, options: &GetItemsOptions, count: bool) -> (String, AnyArguments<'_>) {
         match options {
             GetItemsOptions::Artifact(x) => self.get_artifacts(x, count),
             GetItemsOptions::Execution(x) => self.get_executions(x, count),
@@ -237,7 +237,7 @@ impl Query {
         &self,
         options: &GetArtifactsOptions,
         count: bool,
-    ) -> (String, AnyArguments) {
+    ) -> (String, AnyArguments<'_>) {
         let mut sql = format!(
             "SELECT {} FROM Artifact as A ",
             if count {
@@ -373,7 +373,7 @@ impl Query {
         &self,
         options: &GetExecutionsOptions,
         count: bool,
-    ) -> (String, AnyArguments) {
+    ) -> (String, AnyArguments<'_>) {
         let mut sql = format!(
             "SELECT {} FROM Execution as A ",
             if count {
@@ -505,7 +505,7 @@ impl Query {
         &self,
         options: &GetContextsOptions,
         count: bool,
-    ) -> (String, AnyArguments) {
+    ) -> (String, AnyArguments<'_>) {
         let mut sql = format!(
             "SELECT {} FROM Context as A ",
             if count {
@@ -663,7 +663,7 @@ impl Query {
         type_id: TypeId,
         item_id: Option<Id>,
         item_name: &str,
-    ) -> (String, AnyArguments) {
+    ) -> (String, AnyArguments<'_>) {
         let mut sql = format!(
             "SELECT count(*) FROM {} WHERE type_id=? AND name=?",
             type_kind.item_table_name()
@@ -1303,11 +1303,12 @@ pub trait InsertProperty {
     fn insert_property(&mut self, is_custom: bool, name: String, value: PropertyValue);
 }
 
+#[allow(dead_code)]
 pub trait GetItemsQueryGenerator {
     type Item: for<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> + InsertProperty;
 
     fn generate_select_items_sql(&self) -> String;
-    fn query_values(&self) -> Vec<QueryValue>;
+    fn query_values(&self) -> Vec<QueryValue<'_>>;
 }
 
 fn maybe_null(b: bool, s: &str) -> &str {

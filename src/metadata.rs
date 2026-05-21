@@ -357,8 +357,10 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Artifact {
 
 /// Artifact state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default)]
 pub enum ArtifactState {
     /// Unknown state (default).
+    #[default]
     Unknown = 0,
 
     /// A state indicating that the artifact may exist.
@@ -389,11 +391,6 @@ impl ArtifactState {
     }
 }
 
-impl Default for ArtifactState {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 
 /// Execution.
 #[derive(Debug, Clone, PartialEq)]
@@ -445,8 +442,10 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Execution {
 ///
 /// The state transitions are `New -> Running -> Complete | Cached | Failed | Canceled`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default)]
 pub enum ExecutionState {
     /// Unknown state (default).
+    #[default]
     Unknown = 0,
 
     /// The execution is created but not started yet.
@@ -490,11 +489,6 @@ impl ExecutionState {
     }
 }
 
-impl Default for ExecutionState {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 
 /// Context.
 #[derive(Debug, Clone, PartialEq)]
@@ -548,7 +542,9 @@ impl<'a> sqlx::FromRow<'a, sqlx::any::AnyRow> for Context {
 /// [comment]: https://github.com/google/ml-metadata/blob/v0.26.0/ml_metadata/proto/metadata_store.proto#L94-L161
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
+#[derive(Default)]
 pub enum EventType {
+    #[default]
     Unknown = 0,
     DeclaredOutput = 1,
     DeclaredInput = 2,
@@ -575,11 +571,6 @@ impl EventType {
     }
 }
 
-impl Default for EventType {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 
 /// Event step.
 ///
